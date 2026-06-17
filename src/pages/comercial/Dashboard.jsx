@@ -8,7 +8,7 @@ import {
   TrendingUp, TrendingDown, DollarSign, FileCheck,
   Percent, Target,
 } from 'lucide-react'
-import { semanas, meses, aovivo } from '../../data/comercialData'
+import { useData } from '../../contexts/DataContext'
 
 // ── Helpers ───────────────────────────────────────────────────
 const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) : 0)
@@ -134,7 +134,7 @@ function DeltaTag({ curr, prev, label = '' }) {
 }
 
 // ── Seletor de período ────────────────────────────────────────
-function PeriodNav({ viewMode, setViewMode, semaIdx, setSemaIdx, mesIdx, setMesIdx }) {
+function PeriodNav({ viewMode, setViewMode, semaIdx, setSemaIdx, mesIdx, setMesIdx, semanas, meses, aovivo }) {
   const semana = semanas[semaIdx]
   const mes    = meses[mesIdx]
 
@@ -630,24 +630,42 @@ function ClosersSection({ closers, prevClosers, prevLabel }) {
 }
 
 // ── Componente principal ──────────────────────────────────────
+function findCurrentWeekIndex(weeks) {
+  if (!weeks.length) return 0
+  const now = new Date()
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const started = weeks.reduce((latest, week, index) => week.inicio <= today ? index : latest, -1)
+  return started >= 0 ? started : 0
+}
+
+function findCurrentMonthIndex(months) {
+  if (!months.length) return 0
+  const now = new Date()
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  const started = months.reduce((latest, month, index) => month.id <= currentMonth ? index : latest, -1)
+  return started >= 0 ? started : 0
+}
+
 export default function ComercialDashboard() {
+  const { commercial } = useData()
+  const { semanas = [], meses = [], aovivo } = commercial
   const [viewMode, setViewMode] = useState('semanal')
-  const [semaIdx,  setSemaIdx]  = useState(semanas.length - 1)
-  const [mesIdx,   setMesIdx]   = useState(meses.length - 1)
+  const [semaIdx,  setSemaIdx]  = useState(() => findCurrentWeekIndex(semanas))
+  const [mesIdx,   setMesIdx]   = useState(() => findCurrentMonthIndex(meses))
 
   // TODO: [Supabase] substituir por: supabase.from('comercial_semanas').select('*').order('inicio')
   const currentPeriod = useMemo(() => {
     if (viewMode === 'aovivo')  return aovivo
     if (viewMode === 'semanal') return semanas[semaIdx]
     return meses[mesIdx]
-  }, [viewMode, semaIdx, mesIdx])
+  }, [aovivo, meses, mesIdx, semaIdx, semanas, viewMode])
 
   // TODO: [Supabase] carregar período anterior para delta comparativo
   const prevPeriod = useMemo(() => {
-    if (viewMode === 'aovivo')  return semanas[semanas.length - 1]
+    if (viewMode === 'aovivo')  return semanas[findCurrentWeekIndex(semanas)]
     if (viewMode === 'semanal') return semaIdx > 0 ? semanas[semaIdx - 1] : null
     return mesIdx > 0 ? meses[mesIdx - 1] : null
-  }, [viewMode, semaIdx, mesIdx])
+  }, [meses, mesIdx, semaIdx, semanas, viewMode])
 
   const prevLabel = useMemo(() => {
     if (!prevPeriod) return null
@@ -657,6 +675,15 @@ export default function ComercialDashboard() {
   }, [viewMode, prevPeriod])
 
   const showPipeline = viewMode !== 'semanal'
+
+  if (!currentPeriod) {
+    return (
+      <div className="bg-[#111111] border border-[#1E1E1E] rounded-md p-10 text-center">
+        <h1 className="text-xl font-bold text-white">Dashboard Comercial</h1>
+        <p className="text-gray-500 text-sm mt-2">Nenhum dado disponível para o período selecionado.</p>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-5">
@@ -671,6 +698,8 @@ export default function ComercialDashboard() {
           viewMode={viewMode} setViewMode={setViewMode}
           semaIdx={semaIdx}   setSemaIdx={setSemaIdx}
           mesIdx={mesIdx}     setMesIdx={setMesIdx}
+          semanas={semanas}   meses={meses}
+          aovivo={aovivo}
         />
       </div>
 

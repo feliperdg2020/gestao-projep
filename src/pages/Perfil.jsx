@@ -5,82 +5,9 @@ import { useData } from '../contexts/DataContext'
 import {
   Camera, Mail, Phone, Calendar, Star, Pin, Bell, Lock,
   CheckCircle, Clock, AlertCircle, TrendingUp, Briefcase,
-  MessageSquare, Megaphone, ChevronLeft, Save, Eye, EyeOff,
+  MessageSquare, Megaphone, ChevronLeft, Eye, EyeOff,
   ToggleLeft, ToggleRight, Target, X, Pencil, Check,
 } from 'lucide-react'
-
-// ─── Default data ──────────────────────────────────────────
-
-const ROLE_LABEL = { comercial: 'Comercial', gp: 'Gestão de Pessoas', presidente: 'Presidência' }
-const ROLE_DEPT  = { comercial: 'Comercial', gp: 'Gestão de Pessoas', presidente: 'Diretoria'  }
-
-const DEFAULT_FEEDBACKS = [
-  {
-    id: 1, from: 'Daniela Rocha', role: 'Dir. de Gestão de Pessoas', avatar: 'DR',
-    date: '2026-06-10', stars: 5,
-    text: 'Excelente desempenho este mês! Demonstrou proatividade nas prospecções e entregou resultados acima da meta. Continua no caminho certo para assumir papéis de liderança na equipe.',
-  },
-  {
-    id: 2, from: 'Felipe Daniel', role: 'Presidente', avatar: 'FD',
-    date: '2026-05-28', stars: 4,
-    text: 'Ótimo trabalho na apresentação para o cliente TechStart. A proposta foi bem estruturada e o follow-up foi exemplar. Sugiro desenvolver ainda mais as habilidades de negociação avançada.',
-  },
-  {
-    id: 3, from: 'Daniela Rocha', role: 'Dir. de Gestão de Pessoas', avatar: 'DR',
-    date: '2026-05-05', stars: 4,
-    text: 'Participação ativa nas reuniões de equipe. Bom engajamento com os novos processos do CRM. Pode melhorar o tempo de resposta nos follow-ups pendentes — disciplina é diferencial.',
-  },
-]
-
-function getDefaultProfile() {
-  return {
-    photo: null,
-    email: null,
-    whatsapp: '(11) 99999-0000',
-    joinDate: '2025-03-01',
-    performance: {
-      grade: 9.2,
-      gradeHistory: [
-        { month: 'Jan', grade: 7.2 }, { month: 'Fev', grade: 7.8 },
-        { month: 'Mar', grade: 8.1 }, { month: 'Abr', grade: 8.5 },
-        { month: 'Mai', grade: 8.9 }, { month: 'Jun', grade: 9.2 },
-      ],
-      goalsCompleted: 7,
-      goalsTotal: 10,
-    },
-    projects: [
-      { id: 1, name: 'Consultoria TechStart',  company: 'TechStart Ltda',  status: 'ativo',    role: 'Consultor Principal' },
-      { id: 2, name: 'Transformação Digital',   company: 'Omega Digital',   status: 'ativo',    role: 'Analista'           },
-      { id: 3, name: 'Pesquisa de Mercado',     company: 'Beta Solutions',  status: 'concluido',role: 'Pesquisador'        },
-    ],
-    tasks: [
-      { id: 1, title: 'Enviar proposta para Delta Corp',         status: 'concluida',   due: '2026-06-10' },
-      { id: 2, title: 'Reunião de alinhamento com TechStart',    status: 'em_andamento',due: '2026-06-14' },
-      { id: 3, title: 'Elaborar relatório mensal de vendas',     status: 'pendente',    due: '2026-06-20' },
-      { id: 4, title: 'Atualizar CRM com leads da semana',       status: 'pendente',    due: '2026-06-15' },
-    ],
-    communications: [
-      { id: 1, type: 'pinned',  from: 'Diretoria',     avatar: 'DI', title: 'Planejamento Semestral 2026', body: 'A reunião de planejamento do segundo semestre será na sexta-feira, dia 20/06 às 18h. Presença obrigatória para todos os diretores.', date: '2026-06-12' },
-      { id: 2, type: 'pinned',  from: 'Diretoria',     avatar: 'DI', title: 'Meta de receita — Junho',     body: 'A meta de receita para junho é R$ 80.000. Estamos em 73% do objetivo. Foco total nos fechamentos desta semana!',                   date: '2026-06-10' },
-      { id: 3, type: 'message', from: 'Daniela Rocha', avatar: 'DR', title: 'Avaliação de desempenho',     body: 'Oi! Sua avaliação do mês foi ótima. Parabéns pelo resultado no pipeline. Vamos conversar na próxima semana.',                        date: '2026-06-11' },
-      { id: 4, type: 'notice',  from: 'Sistema',       avatar: 'SY', title: 'Novo contrato cadastrado',    body: 'O contrato com Nexus Tech foi registrado com sucesso no sistema.',                                                                   date: '2026-06-09' },
-    ],
-    settings: {
-      notifications: { email: true, system: true, whatsapp: false, weekly_report: true },
-    },
-  }
-}
-
-function loadProfile(userId) {
-  try {
-    const raw = localStorage.getItem(`ej_profile_${userId}`)
-    return raw ? { ...getDefaultProfile(), ...JSON.parse(raw) } : getDefaultProfile()
-  } catch { return getDefaultProfile() }
-}
-
-function saveProfile(userId, data) {
-  localStorage.setItem(`ej_profile_${userId}`, JSON.stringify(data))
-}
 
 // ─── Line Chart ────────────────────────────────────────────
 
@@ -88,7 +15,7 @@ function LineChart({ data }) {
   const W = 400, H = 80, PX = 24, PY = 10
   const maxG = 10
   const pts = data.map((d, i) => ({
-    x: PX + (i / (data.length - 1)) * (W - PX * 2),
+    x: data.length <= 1 ? W / 2 : PX + (i / (data.length - 1)) * (W - PX * 2),
     y: PY + (1 - d.grade / maxG) * (H - PY * 2),
     ...d,
   }))
@@ -141,6 +68,17 @@ function StarRating({ grade }) {
 
 // ─── Photo Crop Modal ──────────────────────────────────────
 
+function boundPhotoOffset(candidate, naturalSize, zoom) {
+  if (!naturalSize.w || !naturalSize.h) return candidate
+  const coverScale = Math.max(200 / naturalSize.w, 200 / naturalSize.h)
+  const maxX = Math.max(0, (naturalSize.w * coverScale * zoom - 200) / 2)
+  const maxY = Math.max(0, (naturalSize.h * coverScale * zoom - 200) / 2)
+  return {
+    x: Math.max(-maxX, Math.min(maxX, candidate.x)),
+    y: Math.max(-maxY, Math.min(maxY, candidate.y)),
+  }
+}
+
 function PhotoCropModal({ src, onSave, onClose }) {
   const [offset, setOffset]   = useState({ x: 0, y: 0 })
   const [zoom, setZoom]       = useState(1)
@@ -152,21 +90,21 @@ function PhotoCropModal({ src, onSave, onClose }) {
   useEffect(() => {
     const onMove = (e) => {
       if (!dragging || !dragStart.current) return
-      setOffset({
+      setOffset(boundPhotoOffset({
         x: dragStart.current.ox + e.clientX - dragStart.current.sx,
         y: dragStart.current.oy + e.clientY - dragStart.current.sy,
-      })
+      }, naturalSz, zoom))
     }
     const onUp = () => setDragging(false)
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup',   onUp)
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup',   onUp)
     return () => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup',   onUp)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup',   onUp)
     }
-  }, [dragging])
+  }, [dragging, naturalSz, zoom])
 
-  const handleMouseDown = (e) => {
+  const handlePointerDown = (e) => {
     e.preventDefault()
     setDragging(true)
     dragStart.current = { sx: e.clientX, sy: e.clientY, ox: offset.x, oy: offset.y }
@@ -213,8 +151,8 @@ function PhotoCropModal({ src, onSave, onClose }) {
           <div className="flex flex-col items-center gap-4 mb-6">
             <div
               className="relative overflow-hidden border-2 border-[#CE7028]"
-              style={{ width: 200, height: 200, borderRadius: '50%', cursor: dragging ? 'grabbing' : 'grab', userSelect: 'none' }}
-              onMouseDown={handleMouseDown}
+              style={{ width: 200, height: 200, borderRadius: '50%', cursor: dragging ? 'grabbing' : 'grab', userSelect: 'none', touchAction: 'none' }}
+              onPointerDown={handlePointerDown}
             >
               <img
                 ref={imgRef}
@@ -245,7 +183,11 @@ function PhotoCropModal({ src, onSave, onClose }) {
             </div>
             <input
               type="range" min="1" max="3" step="0.05" value={zoom}
-              onChange={e => setZoom(parseFloat(e.target.value))}
+              onChange={e => {
+                const nextZoom = parseFloat(e.target.value)
+                setZoom(nextZoom)
+                setOffset(current => boundPhotoOffset(current, naturalSz, nextZoom))
+              }}
               className="w-full h-1.5 rounded appearance-none cursor-pointer accent-[#CE7028]"
             />
           </div>
@@ -262,49 +204,61 @@ function PhotoCropModal({ src, onSave, onClose }) {
 
 // ─── Inline field editor ───────────────────────────────────
 
-function EditableField({ icon: Icon, label, value, onSave, type = 'text', readOnly = false }) {
+function EditableField({ icon: Icon, value, onSave, type = 'text', readOnly = false }) {
   const [editing, setEditing] = useState(false)
   const [draft,   setDraft]   = useState(value)
+  const [error,   setError]   = useState('')
 
-  const commit = () => { onSave(draft); setEditing(false) }
-  const cancel = () => { setDraft(value); setEditing(false) }
+  const commit = () => {
+    const result = onSave(draft)
+    if (result?.success === false) {
+      setError(result.error)
+      return
+    }
+    setError('')
+    setEditing(false)
+  }
+  const cancel = () => { setDraft(value); setError(''); setEditing(false) }
 
   return (
-    <div className="flex items-center gap-2 group/field">
-      <Icon className="w-4 h-4 text-gray-600 flex-shrink-0" />
-      {editing ? (
-        <div className="flex items-center gap-1.5 flex-1">
-          <input
-            type={type}
-            value={draft}
-            onChange={e => setDraft(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') cancel() }}
-            autoFocus
-            className="flex-1 bg-[#0D0D0D] border border-[#CE7028] rounded px-2 py-1 text-white text-xs focus:outline-none"
-          />
-          <button onClick={commit} className="p-1 text-green-400 hover:text-green-300 transition-colors"><Check className="w-3.5 h-3.5" /></button>
-          <button onClick={cancel} className="p-1 text-gray-600 hover:text-gray-300 transition-colors"><X className="w-3.5 h-3.5" /></button>
-        </div>
-      ) : (
-        <div className="flex items-center gap-1.5 flex-1 min-w-0">
-          <span className="text-gray-400 text-xs truncate flex-1">{value || <span className="text-gray-600 italic">Não informado</span>}</span>
-          {!readOnly && (
-            <button
-              onClick={() => { setDraft(value); setEditing(true) }}
-              className="p-1 text-gray-700 hover:text-[#CE7028] opacity-0 group-hover/field:opacity-100 transition-all"
-            >
-              <Pencil className="w-3 h-3" />
-            </button>
-          )}
-        </div>
-      )}
+    <div>
+      <div className="flex items-center gap-2 group/field">
+        <Icon className="w-4 h-4 text-gray-600 flex-shrink-0" />
+        {editing ? (
+          <div className="flex items-center gap-1.5 flex-1">
+            <input
+              type={type}
+              value={draft}
+              onChange={e => setDraft(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') cancel() }}
+              autoFocus
+              className="flex-1 bg-[#0D0D0D] border border-[#CE7028] rounded px-2 py-1 text-white text-xs focus:outline-none"
+            />
+            <button onClick={commit} className="p-1 text-green-400 hover:text-green-300 transition-colors"><Check className="w-3.5 h-3.5" /></button>
+            <button onClick={cancel} className="p-1 text-gray-600 hover:text-gray-300 transition-colors"><X className="w-3.5 h-3.5" /></button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+            <span className="text-gray-400 text-xs truncate flex-1">{value || <span className="text-gray-600 italic">Não informado</span>}</span>
+            {!readOnly && (
+              <button
+                onClick={() => { setDraft(value); setError(''); setEditing(true) }}
+                className="p-1 text-gray-700 hover:text-[#CE7028] opacity-100 sm:opacity-0 sm:group-hover/field:opacity-100 transition-all"
+              >
+                <Pencil className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+      {error && <p className="text-red-400 text-[10px] mt-1 ml-6">{error}</p>}
     </div>
   )
 }
 
 // ─── Password Modal ────────────────────────────────────────
 
-function PasswordModal({ onClose }) {
+function PasswordModal({ onClose, onChangePassword }) {
   const [form, setForm] = useState({ current: '', next: '', confirm: '' })
   const [show, setShow] = useState(false)
   const [msg,  setMsg]  = useState(null)
@@ -314,6 +268,8 @@ function PasswordModal({ onClose }) {
     e.preventDefault()
     if (form.next !== form.confirm) { setMsg({ type: 'error', text: 'As senhas não coincidem' }); return }
     if (form.next.length < 6)       { setMsg({ type: 'error', text: 'Mínimo de 6 caracteres' });  return }
+    const result = onChangePassword(form.current, form.next)
+    if (!result.success) { setMsg({ type: 'error', text: result.error }); return }
     setMsg({ type: 'success', text: 'Senha alterada com sucesso!' })
     setTimeout(onClose, 1200)
   }
@@ -364,51 +320,51 @@ const PROJECT_STATUS = {
 // ─── Main ──────────────────────────────────────────────────
 
 export default function Perfil() {
-  const { user, updateUserPhoto, updateCurrentUser } = useAuth()
-  const { members, updateMember } = useData()
+  const { user, updateUserPhoto, updateCurrentUser, changePassword } = useAuth()
+  const {
+    members,
+    evaluations,
+    projects: storedProjects,
+    notices: storedNotices,
+    notifications,
+  } = useData()
   const navigate = useNavigate()
   const fileRef  = useRef()
 
   const [editingName, setEditingName] = useState(false)
   const [nameDraft,   setNameDraft]   = useState('')
+  const [nameError,   setNameError]   = useState('')
 
   const saveNameEdit = () => {
     const trimmed = nameDraft.trim()
     if (!trimmed) { setEditingName(false); return }
-    updateCurrentUser({ name: trimmed })
-    const member = members.find(m => m.id === user?.id)
-    if (member) updateMember(member.id, { name: trimmed })
+    const result = updateCurrentUser({ nome: trimmed })
+    if (result?.success === false) {
+      setNameError(result.error)
+      return
+    }
+    setNameError('')
     setEditingName(false)
   }
 
-  const [profile,          setProfile]          = useState(() => loadProfile(user?.id))
   const [showPasswordModal, setShowPasswordModal] = useState(false)
   const [cropSrc,           setCropSrc]           = useState(null)
-  const [saved,             setSaved]             = useState(false)
-
-  const update = (key, value) => {
-    setProfile(prev => {
-      const next = { ...prev, [key]: value }
-      saveProfile(user?.id, next)
-      return next
-    })
-  }
-
-  const updateNested = (path, value) => {
-    setProfile(prev => {
-      const keys = path.split('.')
-      const next = { ...prev }
-      let ref = next
-      keys.slice(0, -1).forEach(k => { ref[k] = { ...ref[k] }; ref = ref[k] })
-      ref[keys[keys.length - 1]] = value
-      saveProfile(user?.id, next)
-      return next
-    })
-  }
+  const [photoError,        setPhotoError]        = useState('')
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0]
     if (!file) return
+    setPhotoError('')
+    if (!file.type.startsWith('image/')) {
+      setPhotoError('Selecione um arquivo de imagem válido.')
+      e.target.value = ''
+      return
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      setPhotoError('A imagem deve ter no máximo 8 MB.')
+      e.target.value = ''
+      return
+    }
     const reader = new FileReader()
     reader.onload = (ev) => setCropSrc(ev.target.result)
     reader.readAsDataURL(file)
@@ -416,24 +372,81 @@ export default function Perfil() {
   }
 
   const handleCropSave = (croppedPhoto) => {
-    update('photo', croppedPhoto)
-    updateUserPhoto(croppedPhoto)
+    const result = updateUserPhoto(croppedPhoto)
+    if (result?.success === false) return setPhotoError(result.error)
+    setPhotoError('')
     setCropSrc(null)
   }
 
-  const handleSave = () => {
-    saveProfile(user?.id, profile)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
+  const roleLabel = user?.cargo || ''
+  const dept = user?.setor || ''
+  const settings = user?.preferenciasNotificacao || {
+    email: true, system: true, whatsapp: false, weekly_report: true,
+  }
+  const evaluation = evaluations.find(item => item.membroId === user?.id)
+  const performance = {
+    grade: evaluation?.nota ?? ((user?.performance || 0) / 10),
+    gradeHistory: (evaluation?.historico || []).map(item => ({ month: item.mes, grade: item.nota })),
+    goalsCompleted: (evaluation?.metas || []).filter(goal => goal.status === 'concluida').length,
+    goalsTotal: (evaluation?.metas || []).length,
+  }
+  if (performance.gradeHistory.length === 0) {
+    performance.gradeHistory = [{ month: 'Atual', grade: performance.grade }]
   }
 
-  const dept      = ROLE_DEPT[user?.role]  || user?.role
-  const roleLabel = ROLE_LABEL[user?.role] || user?.role
-  const { performance, projects, tasks, communications, settings } = profile
+  const feedbacks = (evaluation?.feedbacks || []).map(feedback => {
+    const author = members.find(member => member.id === feedback.avaliadorId)
+    return {
+      id: feedback.id || `${feedback.avaliadorId}-${feedback.data}`,
+      from: author?.nome || 'Membro removido',
+      role: author?.cargo || '',
+      avatar: author?.avatar || '?',
+      date: feedback.data,
+      stars: feedback.estrelas || 5,
+      text: feedback.texto,
+    }
+  })
 
-  const pinnedComms = communications.filter(c => c.type === 'pinned')
-  const messages    = communications.filter(c => c.type === 'message')
-  const notices     = communications.filter(c => c.type === 'notice')
+  const projects = storedProjects
+    .filter(project => project.responsavelId === user?.id || project.membros?.includes(user?.id))
+    .map(project => ({
+      id: project.id,
+      name: project.nome,
+      company: project.clienteNome,
+      status: project.status,
+      role: project.responsavelId === user?.id ? 'Responsável' : 'Membro do projeto',
+    }))
+
+  const tasks = storedProjects.flatMap(project =>
+    (project.tarefas || [])
+      .filter(task => task.responsavelId === user?.id)
+      .map(task => ({
+        id: `${project.id}-${task.id}`,
+        title: task.titulo,
+        status: task.status === 'andamento' ? 'em_andamento' : task.status,
+        due: task.prazo,
+      }))
+  )
+
+  const pinnedComms = storedNotices.filter(notice => notice.fixado).map(notice => {
+    const author = members.find(member => member.id === notice.autorId)
+    return {
+      id: notice.id,
+      from: author?.nome || 'Diretoria',
+      avatar: author?.avatar || 'DI',
+      title: notice.titulo,
+      body: notice.texto,
+      date: notice.timestamp.split('T')[0],
+    }
+  })
+  const notices = notifications
+    .filter(notification => notification.usuarioId == null || notification.usuarioId === user?.id)
+    .slice(0, 3)
+    .map(notification => ({
+      id: notification.id,
+      body: notification.descricao,
+      date: notification.timestamp.split('T')[0],
+    }))
   const goalsPercent = performance.goalsTotal > 0
     ? Math.round((performance.goalsCompleted / performance.goalsTotal) * 100) : 0
 
@@ -450,12 +463,7 @@ export default function Perfil() {
             <p className="text-gray-500 text-sm mt-0.5">Informações pessoais e configurações</p>
           </div>
         </div>
-        <button
-          onClick={handleSave}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded text-sm font-semibold transition-all ${saved ? 'bg-green-700 text-white' : 'bg-[#CE7028] hover:bg-[#B5611F] text-white'}`}
-        >
-          <Save className="w-4 h-4" />{saved ? 'Salvo!' : 'Salvar'}
-        </button>
+        <span className="text-[11px] text-gray-600">Alterações salvas automaticamente</span>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -471,8 +479,8 @@ export default function Perfil() {
                 className="relative w-24 h-24 rounded-full cursor-pointer group"
                 onClick={() => fileRef.current?.click()}
               >
-                {profile.photo ? (
-                  <img src={profile.photo} alt="Foto" className="w-full h-full object-cover rounded-full border-2 border-[#CE7028]" />
+                {user?.fotoPerfil ? (
+                  <img src={user.fotoPerfil} alt="Foto" className="w-full h-full object-cover rounded-full border-2 border-[#CE7028]" />
                 ) : (
                   <div className="w-full h-full bg-[#CE7028] rounded-full border-2 border-[#CE7028] flex items-center justify-center text-white text-3xl font-bold">
                     {user?.avatar}
@@ -484,6 +492,7 @@ export default function Perfil() {
               </div>
               <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
               <p className="text-xs text-gray-600 mt-2">Clique para alterar</p>
+              {photoError && <p className="text-red-400 text-[10px] mt-1 text-center">{photoError}</p>}
             </div>
 
             <div className="text-center mb-5">
@@ -502,12 +511,13 @@ export default function Perfil() {
               ) : (
                 <div
                   className="flex items-center justify-center gap-1.5 mb-1 cursor-pointer group/name"
-                  onClick={() => { setNameDraft(user?.name || ''); setEditingName(true) }}
+                  onClick={() => { setNameDraft(user?.nome || ''); setEditingName(true) }}
                 >
-                  <h2 className="text-white font-bold text-lg">{user?.name}</h2>
-                  <Pencil className="w-3 h-3 text-gray-700 opacity-0 group-hover/name:opacity-100 transition-opacity" />
+                  <h2 className="text-white font-bold text-lg">{user?.nome}</h2>
+                  <Pencil className="w-3 h-3 text-gray-700 opacity-100 sm:opacity-0 sm:group-hover/name:opacity-100 transition-opacity" />
                 </div>
               )}
+              {nameError && <p className="text-red-400 text-[10px] mb-1">{nameError}</p>}
               <p className="text-[#FF882D] text-sm font-medium">{roleLabel}</p>
               <p className="text-gray-500 text-xs mt-0.5">{dept}</p>
             </div>
@@ -517,22 +527,25 @@ export default function Perfil() {
                 <Calendar className="w-4 h-4 text-gray-600 flex-shrink-0" />
                 <div className="flex-1">
                   <p className="text-xs text-gray-600 mb-0.5">Membro desde</p>
-                  <input type="date" value={profile.joinDate} onChange={e => update('joinDate', e.target.value)}
-                    className="bg-transparent text-gray-300 text-xs focus:outline-none w-full" />
+                  <p className="text-gray-300 text-xs">
+                    {user?.dataCadastro
+                      ? new Date(`${user.dataCadastro}T12:00:00`).toLocaleDateString('pt-BR')
+                      : 'Não informado'}
+                  </p>
                 </div>
               </div>
 
               <EditableField
                 icon={Mail} label="Email"
-                value={profile.email || user?.email}
-                onSave={val => update('email', val)}
+                value={user?.email || ''}
+                onSave={val => updateCurrentUser({ email: val })}
                 type="email"
               />
 
               <EditableField
                 icon={Phone} label="WhatsApp"
-                value={profile.whatsapp}
-                onSave={val => update('whatsapp', val)}
+                value={user?.telefone || ''}
+                onSave={val => updateCurrentUser({ telefone: val })}
                 type="tel"
               />
             </div>
@@ -550,11 +563,11 @@ export default function Perfil() {
                 { key: 'whatsapp',     label: 'Mensagens via WhatsApp'  },
                 { key: 'weekly_report',label: 'Relatório Semanal'       },
               ].map(({ key, label }) => {
-                const on = settings.notifications[key]
+                const on = settings[key]
                 return (
                   <div key={key} className="flex items-center justify-between">
                     <span className="text-gray-400 text-sm">{label}</span>
-                    <button onClick={() => updateNested(`settings.notifications.${key}`, !on)}
+                    <button onClick={() => updateCurrentUser({ preferenciasNotificacao: { ...settings, [key]: !on } })}
                       className={`transition-colors ${on ? 'text-[#CE7028]' : 'text-gray-700'}`}>
                       {on ? <ToggleRight className="w-6 h-6" /> : <ToggleLeft className="w-6 h-6" />}
                     </button>
@@ -610,7 +623,7 @@ export default function Perfil() {
                 <MessageSquare className="w-3.5 h-3.5" /> Feedbacks Recebidos
               </p>
               <div className="space-y-3">
-                {DEFAULT_FEEDBACKS.map(fb => (
+                {feedbacks.map(fb => (
                   <div key={fb.id} className="p-4 bg-[#0D0D0D] border border-[#1E1E1E] rounded hover:border-[#CE7028]/20 transition-colors">
                     <div className="flex items-start justify-between gap-3 mb-3">
                       <div className="flex items-center gap-2.5">
@@ -636,6 +649,7 @@ export default function Perfil() {
                     <p className="text-gray-400 text-xs leading-relaxed">{fb.text}</p>
                   </div>
                 ))}
+                {feedbacks.length === 0 && <p className="text-gray-700 text-xs text-center py-6">Nenhum feedback recebido ainda.</p>}
               </div>
             </div>
           </div>
@@ -709,25 +723,6 @@ export default function Perfil() {
                 </div>
               </div>
             )}
-            {messages.length > 0 && (
-              <div className="mb-4">
-                <p className="text-xs text-gray-600 uppercase tracking-wider font-semibold mb-2">Mensagens</p>
-                <div className="space-y-2">
-                  {messages.map(c => (
-                    <div key={c.id} className="flex items-start gap-3 p-3 bg-[#0D0D0D] border border-[#1E1E1E] rounded">
-                      <div className="w-7 h-7 bg-blue-900/50 border border-blue-800/30 rounded-full flex items-center justify-center text-blue-300 text-[10px] font-bold flex-shrink-0">{c.avatar}</div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2 mb-1">
-                          <span className="text-white text-xs font-semibold">{c.from}</span>
-                          <span className="text-gray-600 text-[10px]">{new Date(c.date + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
-                        </div>
-                        <p className="text-gray-400 text-xs leading-relaxed">{c.body}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
             {notices.length > 0 && (
               <div>
                 <p className="text-xs text-gray-600 uppercase tracking-wider font-semibold mb-2 flex items-center gap-1.5">
@@ -750,7 +745,7 @@ export default function Perfil() {
 
       {/* Modals */}
       {cropSrc          && <PhotoCropModal src={cropSrc} onSave={handleCropSave} onClose={() => setCropSrc(null)} />}
-      {showPasswordModal && <PasswordModal onClose={() => setShowPasswordModal(false)} />}
+      {showPasswordModal && <PasswordModal onClose={() => setShowPasswordModal(false)} onChangePassword={changePassword} />}
     </div>
   )
 }

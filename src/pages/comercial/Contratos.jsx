@@ -9,18 +9,20 @@ const STATUS = {
   cancelado: { label: 'Cancelado', className: 'bg-red-500/10 text-red-400 border-red-700/30' },
 }
 
-const EMPTY = { company: '', value: '', startDate: '', endDate: '', status: 'ativo', description: '', responsible: '', deliveries: 1, deliveriesDone: 0 }
+const EMPTY = { company: '', value: '', startDate: '', endDate: '', status: 'ativo', description: '', responsavelId: '', responsible: '', deliveries: 1, deliveriesDone: 0 }
 
 const INPUT_CLS = "w-full bg-[#0D0D0D] border border-[#1E1E1E] rounded px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#CE7028] transition-colors placeholder-gray-700"
 const LABEL_CLS = "text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 block"
 
-function Modal({ contract, onClose, onSave }) {
+function Modal({ contract, members, onClose, onSave }) {
   const [form, setForm] = useState(contract || EMPTY)
+  const [error, setError] = useState('')
   const set = (k, v) => setForm(prev => ({ ...prev, [k]: v }))
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    onSave({ ...form, value: Number(form.value), deliveries: Number(form.deliveries), deliveriesDone: Number(form.deliveriesDone) })
+    const result = onSave({ ...form, value: Number(form.value), deliveries: Number(form.deliveries), deliveriesDone: Number(form.deliveriesDone) })
+    if (result?.success === false) return setError(result.error)
     onClose()
   }
 
@@ -65,13 +67,21 @@ function Modal({ contract, onClose, onSave }) {
             </div>
             <div className="col-span-2">
               <label className={LABEL_CLS}>Responsável</label>
-              <input value={form.responsible} onChange={e => set('responsible', e.target.value)} className={INPUT_CLS} placeholder="Nome do responsável" />
+              <select value={form.responsavelId || (form.responsible ? 'legacy' : '')} onChange={e => {
+                const member = members.find(item => String(item.id) === e.target.value)
+                setForm(prev => ({ ...prev, responsavelId: member?.id || '', responsible: member?.nome || '' }))
+              }} className={INPUT_CLS}>
+                <option value="">Sem responsável</option>
+                {form.responsible && !form.responsavelId && <option value="legacy">Atual: {form.responsible}</option>}
+                {members.map(member => <option key={member.id} value={member.id}>{member.nome} · {member.setor}</option>)}
+              </select>
             </div>
             <div className="col-span-2">
               <label className={LABEL_CLS}>Descrição</label>
               <textarea value={form.description} onChange={e => set('description', e.target.value)} rows={2} className={`${INPUT_CLS} resize-none`} placeholder="Descrição do projeto..." />
             </div>
           </div>
+          {error && <p className="text-red-400 text-xs">{error}</p>}
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded border border-[#1E1E1E] text-gray-500 hover:text-white text-sm transition-all">Cancelar</button>
             <button type="submit" className="flex-1 py-2.5 rounded bg-[#CE7028] hover:bg-[#B5611F] text-white font-semibold text-sm transition-colors">{contract?.id ? 'Salvar' : 'Criar'}</button>
@@ -83,7 +93,7 @@ function Modal({ contract, onClose, onSave }) {
 }
 
 export default function Contratos() {
-  const { contracts, addContract, updateContract, deleteContract } = useData()
+  const { members, contracts, addContract, updateContract, deleteContract } = useData()
   const [showModal, setShowModal] = useState(false)
   const [editContract, setEditContract] = useState(null)
   const [filter, setFilter] = useState('todos')
@@ -92,8 +102,12 @@ export default function Contratos() {
   const totalActive = contracts.filter(c => c.status === 'ativo').reduce((s, c) => s + c.value, 0)
 
   const handleSave = (data) => {
-    if (data.id) updateContract(data.id, data)
-    else addContract(data)
+    return data.id ? updateContract(data.id, data) : addContract(data)
+  }
+
+  const handleDelete = contract => {
+    if (!window.confirm(`Remover o contrato de ${contract.company}? O projeto vinculado também será removido.`)) return
+    deleteContract(contract.id)
   }
 
   return (
@@ -134,11 +148,11 @@ export default function Contratos() {
                   <h3 className="text-white font-semibold">{contract.company}</h3>
                   <p className="text-gray-600 text-xs mt-0.5">{contract.description}</p>
                 </div>
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                   <button onClick={() => { setEditContract(contract); setShowModal(true) }} className="p-1.5 rounded text-gray-600 hover:text-[#FF882D] hover:bg-[#CE7028]/10 transition-all">
                     <Edit2 className="w-3.5 h-3.5" />
                   </button>
-                  <button onClick={() => deleteContract(contract.id)} className="p-1.5 rounded text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-all">
+                  <button onClick={() => handleDelete(contract)} className="p-1.5 rounded text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-all">
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -182,7 +196,7 @@ export default function Contratos() {
       </div>
 
       {showModal && (
-        <Modal contract={editContract} onClose={() => { setShowModal(false); setEditContract(null) }} onSave={handleSave} />
+        <Modal contract={editContract} members={members.filter(member => member.status === 'ativo')} onClose={() => { setShowModal(false); setEditContract(null) }} onSave={handleSave} />
       )}
     </div>
   )

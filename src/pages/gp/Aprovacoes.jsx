@@ -1,13 +1,7 @@
 import { useState } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
-import { useData } from '../../contexts/DataContext'
-import { UserCheck, UserX, Clock, CheckCircle, XCircle, Users, Calendar, Mail, Briefcase, Building } from 'lucide-react'
-
-const ROLE_OPTIONS = [
-  { value: 'comercial',  label: 'Comercial'         },
-  { value: 'gp',         label: 'Gestão de Pessoas' },
-  { value: 'presidente', label: 'Presidente'         },
-]
+import { getAvailableRolePresets, getSuggestedRolePreset } from '../../config/rolePresets'
+import { UserCheck, UserX, Clock, CheckCircle, XCircle, Users, Calendar, Mail, Building } from 'lucide-react'
 
 function fmtDate(iso) {
   if (!iso) return '—'
@@ -19,55 +13,36 @@ const AVATAR_COLORS = ['#3D5A80','#2A6B69','#7B2D8B','#1A3A5C','#5C3A1A','#4A5C1
 const avatarColor = (id) => AVATAR_COLORS[Number(id) % AVATAR_COLORS.length]
 
 export default function Aprovacoes() {
-  const { getPendingUsers, approveUser, rejectUser } = useAuth()
-  const { addMember } = useData()
+  const { user, getPendingUsers, approveUser, rejectUser } = useAuth()
+  const roleOptions = getAvailableRolePresets(user)
 
-  const [roles,      setRoles]      = useState({}) // { userId: 'comercial' }
-  const [confirmed,  setConfirmed]  = useState([]) // ids recently acted on
+  const [roles,     setRoles]     = useState({})
+  const [confirmed, setConfirmed] = useState([])
+  const [error, setError] = useState('')
 
   const pending = getPendingUsers()
-  const actedOn = confirmed.length
+  const selectedRole = pendingUser => roles[pendingUser.id] || getSuggestedRolePreset(user, pendingUser)?.value
 
   const handleApprove = (u) => {
-    const role = roles[u.id] || 'comercial'
-    approveUser(u.id, role)
-    // Add to member directory
-    addMember({
-      id:          u.id,
-      name:        u.name,
-      role:        u.jobTitle || ROLE_OPTIONS.find(r => r.value === role)?.label || role,
-      department:  u.department || '',
-      email:       u.email,
-      phone:       '',
-      status:      'ativo',
-      joinDate:    new Date().toISOString().split('T')[0],
-      skills:      [],
-      avatar:      u.avatar,
-      projects:    0,
-      performance: 0,
-    })
-    setConfirmed(prev => [...prev, { id: u.id, action: 'approved', name: u.name }])
-    // Dispatch notification
-    window.dispatchEvent(new CustomEvent('ej:notification', {
-      detail: {
-        id: Date.now(), type: 'system', read: false,
-        title: 'Cadastro aprovado',
-        desc:  `${u.name} agora tem acesso ao sistema como ${ROLE_OPTIONS.find(r => r.value === role)?.label}`,
-        time:  new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-      }
-    }))
+    setError('')
+    const roleKey = selectedRole(u)
+    const opt = roleOptions.find(r => r.value === roleKey)
+    const result = approveUser(u.id, opt?.permissions || { chat: true }, opt?.role || 'membro')
+    if (!result.success) return setError(result.error)
+    setConfirmed(prev => [...prev, { id: u.id, action: 'approved', nome: u.nome }])
   }
 
   const handleReject = (u) => {
-    rejectUser(u.id)
-    setConfirmed(prev => [...prev, { id: u.id, action: 'rejected', name: u.name }])
+    setError('')
+    const result = rejectUser(u.id)
+    if (!result.success) return setError(result.error)
+    setConfirmed(prev => [...prev, { id: u.id, action: 'rejected', nome: u.nome }])
   }
 
   const visiblePending = pending.filter(u => !confirmed.find(c => c.id === u.id))
 
   return (
     <div className="space-y-6 max-w-4xl">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-3">
@@ -84,21 +59,25 @@ export default function Aprovacoes() {
         )}
       </div>
 
-      {/* Recent actions feedback */}
       {confirmed.length > 0 && (
         <div className="space-y-2">
           {confirmed.slice(-3).map(c => (
             <div key={c.id} className={`flex items-center gap-3 px-4 py-3 rounded border text-sm ${c.action === 'approved' ? 'bg-green-950/30 border-green-900/30 text-green-400' : 'bg-red-950/30 border-red-900/30 text-red-400'}`}>
               {c.action === 'approved'
-                ? <><CheckCircle className="w-4 h-4 flex-shrink-0" /> <strong>{c.name}</strong> foi aprovado e já tem acesso ao sistema.</>
-                : <><XCircle className="w-4 h-4 flex-shrink-0" /> <strong>{c.name}</strong> foi reprovado.</>
+                ? <><CheckCircle className="w-4 h-4 flex-shrink-0" /> <strong>{c.nome}</strong> foi aprovado e já tem acesso ao sistema.</>
+                : <><XCircle className="w-4 h-4 flex-shrink-0" /> <strong>{c.nome}</strong> foi reprovado.</>
               }
             </div>
           ))}
         </div>
       )}
 
-      {/* Pending list */}
+      {error && (
+        <div className="bg-red-950/30 border border-red-900/30 text-red-400 text-sm px-4 py-3 rounded">
+          {error}
+        </div>
+      )}
+
       {visiblePending.length === 0 ? (
         <div className="bg-[#111111] border border-[#1E1E1E] rounded-md flex flex-col items-center justify-center py-20 text-center">
           <Users className="w-12 h-12 text-gray-700 mb-4" />
@@ -110,7 +89,6 @@ export default function Aprovacoes() {
           {visiblePending.map(u => (
             <div key={u.id} className="bg-[#111111] border border-[#1E1E1E] rounded-md p-5 hover:border-[#CE7028]/20 transition-colors">
               <div className="flex flex-col sm:flex-row sm:items-center gap-5">
-                {/* Avatar + info */}
                 <div className="flex items-center gap-4 flex-1 min-w-0">
                   <div
                     className="w-14 h-14 rounded-full flex items-center justify-center text-white text-lg font-bold flex-shrink-0"
@@ -120,7 +98,7 @@ export default function Aprovacoes() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-white font-bold text-base truncate">{u.name}</h3>
+                      <h3 className="text-white font-bold text-base truncate">{u.nome}</h3>
                       <span className="text-[10px] font-semibold bg-yellow-950/40 border border-yellow-900/30 text-yellow-400 px-1.5 py-0.5 rounded flex-shrink-0">
                         Pendente
                       </span>
@@ -129,32 +107,31 @@ export default function Aprovacoes() {
                       <div className="flex items-center gap-1.5 text-xs text-gray-500">
                         <Mail className="w-3 h-3" /> {u.email}
                       </div>
-                      {u.department && (
+                      {u.setor && (
                         <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                          <Building className="w-3 h-3" /> {u.department}
-                          {u.jobTitle && <span className="text-gray-700">·</span>}
-                          {u.jobTitle && <span>{u.jobTitle}</span>}
+                          <Building className="w-3 h-3" /> {u.setor}
+                          {u.cargo && <span className="text-gray-700">·</span>}
+                          {u.cargo && <span>{u.cargo}</span>}
                         </div>
                       )}
-                      {u.createdAt && (
+                      {u.dataCadastro && (
                         <div className="flex items-center gap-1.5 text-xs text-gray-600">
-                          <Calendar className="w-3 h-3" /> Solicitado em {fmtDate(u.createdAt)}
+                          <Calendar className="w-3 h-3" /> Solicitado em {fmtDate(u.dataCadastro)}
                         </div>
                       )}
                     </div>
                   </div>
                 </div>
 
-                {/* Actions */}
                 <div className="flex flex-col sm:items-end gap-3 flex-shrink-0">
                   <div>
-                    <label className="text-[10px] text-gray-600 uppercase tracking-wider font-semibold block mb-1.5">Cargo no sistema</label>
+                    <label className="text-[10px] text-gray-600 uppercase tracking-wider font-semibold block mb-1.5">Acesso concedido</label>
                     <select
-                      value={roles[u.id] || 'comercial'}
+                      value={selectedRole(u)}
                       onChange={e => setRoles(prev => ({ ...prev, [u.id]: e.target.value }))}
                       className="bg-[#0D0D0D] border border-[#2A2A2A] rounded px-3 py-2 text-white text-xs focus:outline-none focus:border-[#CE7028] transition-colors"
                     >
-                      {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                      {roleOptions.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                     </select>
                   </div>
 

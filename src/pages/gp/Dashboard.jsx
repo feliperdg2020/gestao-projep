@@ -1,5 +1,6 @@
 import { useData } from '../../contexts/DataContext'
 import { Users, UserCheck, UserPlus, TrendingUp, Star, Activity } from 'lucide-react'
+import UserAvatar from '../../components/UserAvatar'
 
 function KPICard({ title, value, subtitle, icon: Icon, accent }) {
   return (
@@ -20,6 +21,7 @@ const DEPT_COLORS = {
   'Projetos': 'bg-purple-500',
   'Diretoria': 'bg-yellow-500',
   'Marketing': 'bg-pink-500',
+  'Adm e Fin': 'bg-green-500',
 }
 
 export default function GPDashboard() {
@@ -33,7 +35,7 @@ export default function GPDashboard() {
     : 0
 
   const deptMap = {}
-  activeMembers.forEach(m => { deptMap[m.department] = (deptMap[m.department] || 0) + 1 })
+  activeMembers.forEach(m => { deptMap[m.setor] = (deptMap[m.setor] || 0) + 1 })
   const depts = Object.entries(deptMap).sort((a, b) => b[1] - a[1])
 
   const topPerformers = [...activeMembers].sort((a, b) => (b.performance || 0) - (a.performance || 0)).slice(0, 5)
@@ -91,12 +93,10 @@ export default function GPDashboard() {
           <div className="space-y-2">
             {topPerformers.map(member => (
               <div key={member.id} className="flex items-center gap-3 p-3 bg-[#161616] border border-[#1E1E1E] rounded hover:border-[#2A2A2A] transition-colors">
-                <div className="w-8 h-8 bg-blue-900/50 border border-blue-800/30 rounded flex items-center justify-center text-xs font-bold text-blue-300">
-                  {member.avatar}
-                </div>
+                <UserAvatar user={member} size={32} fallbackColor="#1E3A5F" textClassName="text-xs" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-white text-sm font-semibold truncate">{member.name}</p>
-                  <p className="text-gray-600 text-xs">{member.role}</p>
+                  <p className="text-white text-sm font-semibold truncate">{member.nome}</p>
+                  <p className="text-gray-600 text-xs">{member.cargo}</p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <div className="w-16 h-1.5 bg-[#1E1E1E] rounded-full overflow-hidden">

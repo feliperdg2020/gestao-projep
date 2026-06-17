@@ -1,81 +1,66 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { useData } from '../contexts/DataContext'
+import { useTheme } from '../contexts/ThemeContext'
+import {
+  ACCESS_MODULES,
+  getDefaultPath,
+  hasModuleAccess,
+  hasPathAccess,
+  hasSubareaAccess,
+} from '../config/accessControl'
 import {
   Users, LayoutDashboard, Kanban, Trophy, FileText,
-  LogOut, Menu, X, ChevronRight, Bell,
+  LogOut, Menu, X, ChevronRight, Bell, Lock,
   Crown, Calculator, FolderKanban, Megaphone, TrendingUp,
-  PanelLeftClose, PanelLeftOpen, Lock, MessageSquare,
-  AlertCircle, FileCheck, Target, CheckCircle, UserCheck,
+  PanelLeftClose, PanelLeftOpen, MessageSquare, Shield,
+  AlertCircle, FileCheck, Target, CheckCircle, UserCheck, CalendarDays,
+  Sun, Moon,
 } from 'lucide-react'
-import { ProjepSymbol, ProjepLogoFull } from './ProjepLogo'
+import ProjepLogo, { ProjepSymbol } from './ProjepLogo'
+import UserAvatar from './UserAvatar'
 
-// ── Notification data ─────────────────────────────────────────
-const DEFAULT_NOTIFS = [
-  { id: 1, type: 'message',  read: false, title: 'Daniela Rocha',      desc: 'Sua avaliação do mês saiu. Resultados ótimos!',         time: '14:32' },
-  { id: 2, type: 'task',     read: false, title: 'Tarefa vencendo hoje',desc: 'Relatório mensal de vendas — prazo: hoje',              time: '11:00' },
-  { id: 3, type: 'notice',   read: false, title: 'Novo comunicado',     desc: 'Planejamento semestral — reunião sexta-feira às 18h',   time: '09:15' },
-  { id: 4, type: 'contract', read: true,  title: 'Contrato assinado',   desc: 'Delta Corp confirmou assinatura do contrato',          time: 'Ontem'  },
-  { id: 5, type: 'system',   read: true,  title: 'Meta de junho',       desc: 'Estamos em 73% da meta mensal — foco no fechamento!',  time: '2 dias' },
-]
+const ICONS = {
+  crown: Crown,
+  calculator: Calculator,
+  'folder-kanban': FolderKanban,
+  megaphone: Megaphone,
+  'trending-up': TrendingUp,
+  users: Users,
+  'message-square': MessageSquare,
+  shield: Shield,
+  dashboard: LayoutDashboard,
+  kanban: Kanban,
+  calendar: CalendarDays,
+  trophy: Trophy,
+  'file-text': FileText,
+  'user-check': UserCheck,
+}
 
 const NOTIF_ICONS = {
-  message:  { Icon: MessageSquare, cls: 'text-blue-400  bg-blue-950/40  border-blue-900/30'    },
-  task:     { Icon: AlertCircle,   cls: 'text-yellow-400 bg-yellow-950/30 border-yellow-900/20' },
-  notice:   { Icon: Megaphone,     cls: 'text-[#FF882D] bg-[#CE7028]/10  border-[#CE7028]/20'  },
-  contract: { Icon: FileCheck,     cls: 'text-green-400 bg-green-950/40  border-green-900/30'  },
-  system:   { Icon: Target,        cls: 'text-gray-400  bg-[#1A1A1A]     border-[#1E1E1E]'     },
+  mensagem:  { Icon: MessageSquare, cls: 'text-blue-400  bg-blue-950/40  border-blue-900/30'    },
+  message:   { Icon: MessageSquare, cls: 'text-blue-400  bg-blue-950/40  border-blue-900/30'    },
+  aprovacao: { Icon: UserCheck,     cls: 'text-yellow-400 bg-yellow-950/30 border-yellow-900/20'},
+  task:      { Icon: AlertCircle,   cls: 'text-yellow-400 bg-yellow-950/30 border-yellow-900/20'},
+  aviso:     { Icon: Megaphone,     cls: 'text-[#FF882D] bg-[#CE7028]/10  border-[#CE7028]/20' },
+  notice:    { Icon: Megaphone,     cls: 'text-[#FF882D] bg-[#CE7028]/10  border-[#CE7028]/20' },
+  contract:  { Icon: FileCheck,     cls: 'text-green-400 bg-green-950/40  border-green-900/30' },
+  sistema:   { Icon: Target,        cls: 'text-gray-400  bg-[#1A1A1A]     border-[#1E1E1E]'    },
+  system:    { Icon: Target,        cls: 'text-gray-400  bg-[#1A1A1A]     border-[#1E1E1E]'    },
 }
 
-function loadNotifs() {
-  try { return JSON.parse(localStorage.getItem('ej_notifications')) || DEFAULT_NOTIFS }
-  catch { return DEFAULT_NOTIFS }
-}
-
-// ── Sectors ───────────────────────────────────────────────────
-const SECTORS = [
-  {
-    id: 'presidencia', label: 'Presidência', icon: Crown,
-    path: null, comingSoon: true, allowedRoles: ['presidente'],
-  },
-  {
-    id: 'admin', label: 'Adm. e Financeiro', icon: Calculator,
-    path: null, comingSoon: true, allowedRoles: ['presidente'],
-  },
-  {
-    id: 'comercial', label: 'Comercial', icon: TrendingUp,
-    path: '/comercial', comingSoon: false, allowedRoles: ['comercial', 'presidente'],
-    subItems: [
-      { path: '/comercial',          label: 'Dashboard', icon: LayoutDashboard },
-      { path: '/comercial/pipeline', label: 'Pipeline',  icon: Kanban          },
-      { path: '/comercial/ranking',  label: 'Ranking',   icon: Trophy          },
-      { path: '/comercial/contratos',label: 'Contratos', icon: FileText        },
-    ],
-  },
-  {
-    id: 'projetos', label: 'Projetos', icon: FolderKanban,
-    path: null, comingSoon: true, allowedRoles: ['presidente'],
-  },
-  {
-    id: 'marketing', label: 'Marketing', icon: Megaphone,
-    path: null, comingSoon: true, allowedRoles: ['presidente'],
-  },
-  {
-    id: 'gp', label: 'Gestão de Pessoas', icon: Users,
-    path: '/gp', comingSoon: false, allowedRoles: ['gp', 'presidente'],
-    subItems: [
-      { path: '/gp',               label: 'Dashboard',        icon: LayoutDashboard },
-      { path: '/gp/membros',       label: 'Membros',          icon: Users           },
-      { path: '/gp/processo',      label: 'Processo Seletivo',icon: FileText        },
-      { path: '/gp/aprovacoes',    label: 'Aprovações',       icon: UserCheck       },
-    ],
-  },
-  {
-    id: 'chat', label: 'Chat', icon: MessageSquare,
-    path: '/chat', comingSoon: false,
-    allowedRoles: ['comercial', 'gp', 'presidente'],
-  },
-]
+const SECTORS = ACCESS_MODULES.map(module => ({
+  id: module.key,
+  label: module.label,
+  icon: ICONS[module.icon],
+  path: module.path,
+  comingSoon: !module.available,
+  subItems: module.subareas.map(subarea => ({
+    ...subarea,
+    icon: ICONS[subarea.icon],
+  })),
+}))
 
 // ── Tooltip ───────────────────────────────────────────────────
 function Tooltip({ label, children }) {
@@ -92,29 +77,20 @@ function Tooltip({ label, children }) {
   )
 }
 
-// ── Avatar helper ─────────────────────────────────────────────
-function UserAvatar({ photo, avatar, size = 8, className = '' }) {
-  return photo ? (
-    <img
-      src={photo}
-      alt="Avatar"
-      className={`w-${size} h-${size} rounded-full object-cover flex-shrink-0 ${className}`}
-    />
-  ) : (
-    <div className={`w-${size} h-${size} bg-[#CE7028] rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 ${className}`}>
-      {avatar}
-    </div>
-  )
-}
-
 // ── Main ──────────────────────────────────────────────────────
 export default function Layout({ children }) {
   const [mobileOpen,    setMobileOpen]    = useState(false)
   const [collapsed,     setCollapsed]     = useState(false)
   const [showNotifs,    setShowNotifs]    = useState(false)
-  const [notifications, setNotifications] = useState(loadNotifs)
 
-  const { user, userPhoto, logout } = useAuth()
+  const { user, logout } = useAuth()
+  const { theme, toggleTheme } = useTheme()
+  const {
+    notifications: storedNotifications,
+    messages: storedMessages,
+    markNotificationRead,
+    markAllNotificationsRead,
+  } = useData()
   const location  = useLocation()
   const navigate  = useNavigate()
   const bellRef   = useRef(null)
@@ -132,55 +108,71 @@ export default function Layout({ children }) {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  // Listen for new notifications dispatched by Chat, Register, etc.
-  useEffect(() => {
-    const handler = (e) => {
-      const notif = e.detail
-      if (!notif) return
-      setNotifications(prev => {
-        if (prev.some(n => n.id === notif.id)) return prev
-        const updated = [notif, ...prev]
-        localStorage.setItem('ej_notifications', JSON.stringify(updated))
-        return updated
-      })
-    }
-    window.addEventListener('ej:notification', handler)
-    return () => window.removeEventListener('ej:notification', handler)
-  }, [])
-
   const handleLogout = () => { logout(); navigate('/login') }
 
-  const markAllRead = () => {
-    const updated = notifications.map(n => ({ ...n, read: true }))
-    setNotifications(updated)
-    localStorage.setItem('ej_notifications', JSON.stringify(updated))
-  }
+  const notifications = storedNotifications
+    .filter(notification => {
+      const isRecipient = notification.usuarioId == null || notification.usuarioId === user?.id
+      const matchesAudience = notification.audiencia !== 'diretoria' || ['presidente', 'diretor'].includes(user?.role)
+      const matchesModule = !notification.modulo || hasModuleAccess(user, notification.modulo)
+      const systemEnabled = user?.preferenciasNotificacao?.system !== false
+      const isDirectMessage = notification.tipo === 'mensagem'
+      return isRecipient && matchesAudience && matchesModule && (systemEnabled || isDirectMessage)
+    })
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+    .map(notification => ({
+      id: notification.id,
+      type: notification.tipo,
+      read: notification.usuarioId == null
+        ? (notification.lidosPor || []).includes(user?.id)
+        : notification.lida,
+      title: notification.titulo,
+      desc: notification.descricao,
+      time: new Date(notification.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      link: notification.link,
+    }))
 
-  const markRead = (id) => {
-    const updated = notifications.map(n => n.id === id ? { ...n, read: true } : n)
-    setNotifications(updated)
-    localStorage.setItem('ej_notifications', JSON.stringify(updated))
+  const markAllRead = () => markAllNotificationsRead(user?.id)
+  const markRead = notification => {
+    markNotificationRead(notification.id, user?.id)
+    if (notification.link) {
+      const pathname = notification.link.split('?')[0]
+      navigate(hasPathAccess(user, pathname) ? notification.link : getDefaultPath(user))
+    }
+    setShowNotifs(false)
   }
-
   const unreadCount = notifications.filter(n => !n.read).length
+  const chatUnreadCount = (storedMessages || []).filter(message => {
+    if (!user?.id || message.remetenteId === user.id) return false
+
+    if (message.destinatarioId === user.id) {
+      return !message.lida
+    }
+
+    if (message.destinatarioId === 'avisos') {
+      return !(message.lidosPor || []).includes(user.id)
+    }
+
+    return false
+  }).length
   const activeSector = SECTORS.find(s => s.path && location.pathname.startsWith(s.path))
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] flex">
+    <div className="app-shell min-h-screen bg-[#0A0A0A] flex">
       {mobileOpen && (
         <div className="fixed inset-0 bg-black/60 z-20 lg:hidden" onClick={() => setMobileOpen(false)} />
       )}
 
       {/* ── Sidebar ──────────────────────────────────────── */}
-      <aside className={`fixed top-0 left-0 h-full bg-[#044947] z-30 flex flex-col transition-all duration-300 ease-in-out transform ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 ${collapsed ? 'w-[68px]' : 'w-64'}`}>
+      <aside className={`app-sidebar fixed top-0 left-0 h-full bg-[#044947] z-30 flex flex-col transition-all duration-300 ease-in-out transform ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 ${collapsed ? 'w-[68px]' : 'w-64'}`}>
 
         {/* Logo header */}
         <div className={`flex items-center border-b border-white/10 h-[64px] flex-shrink-0 ${collapsed ? 'justify-center px-0' : 'px-4 gap-3'}`}>
           {collapsed ? (
-            <ProjepSymbol size={28} color="#CE7028" />
+            <ProjepSymbol width={30} height={48} />
           ) : (
             <>
-              <div className="flex-1 min-w-0"><ProjepLogoFull size="sm" /></div>
+              <div className="flex-1 min-w-0"><ProjepLogo width={140} height={88} textColor="#FFFFFF" className="max-h-[54px] w-auto" /></div>
               <button onClick={() => setCollapsed(true)} className="p-1.5 rounded text-white/40 hover:text-white hover:bg-white/10 transition-all flex-shrink-0" title="Minimizar">
                 <PanelLeftClose className="w-4 h-4" />
               </button>
@@ -202,13 +194,15 @@ export default function Layout({ children }) {
           <div className={`space-y-0.5 ${collapsed ? 'px-2' : 'px-3'}`}>
             {SECTORS.map(sector => {
               const Icon = sector.icon
-              const hasAccess = sector.allowedRoles.includes(user?.role)
+              const hasAccess = hasModuleAccess(user, sector.id)
               const isActive = activeSector?.id === sector.id
               const isDisabled = sector.comingSoon || !hasAccess
+              const visibleSubItems = sector.subItems?.filter(item => hasSubareaAccess(user, item.key)) || []
+              const destination = visibleSubItems[0]?.path || sector.path
 
               const sectorRow = (
                 <div className={`
-                  flex items-center transition-all duration-150 select-none
+                  relative flex items-center transition-all duration-150 select-none
                   ${collapsed ? 'justify-center w-10 h-10 mx-auto rounded' : 'gap-3 px-3 py-2.5 rounded'}
                   ${isActive && !isDisabled
                     ? 'bg-[#CE7028] text-white'
@@ -218,9 +212,19 @@ export default function Layout({ children }) {
                   }
                 `}>
                   <Icon className="w-4 h-4 flex-shrink-0" />
+                  {collapsed && sector.id === 'chat' && chatUnreadCount > 0 && !isDisabled && (
+                    <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 rounded-full bg-emerald-400 text-[#044947] text-[9px] font-extrabold flex items-center justify-center shadow-[0_0_12px_rgba(52,211,153,0.55)]">
+                      {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
+                    </span>
+                  )}
                   {!collapsed && (
                     <>
                       <span className="text-sm font-medium flex-1 truncate">{sector.label}</span>
+                      {sector.id === 'chat' && chatUnreadCount > 0 && !isDisabled && (
+                        <span className="min-w-[18px] h-[18px] px-1.5 rounded-full bg-emerald-400 text-[#044947] text-[10px] font-extrabold flex items-center justify-center shadow-[0_0_12px_rgba(52,211,153,0.45)]">
+                          {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
+                        </span>
+                      )}
                       {sector.comingSoon && (
                         <span className="text-[10px] font-semibold bg-white/10 text-white/40 px-1.5 py-0.5 rounded flex-shrink-0 leading-none">Em breve</span>
                       )}
@@ -237,18 +241,18 @@ export default function Layout({ children }) {
                     <Tooltip label={`${sector.label}${sector.comingSoon ? ' — Em breve' : ''}`}>
                       {isDisabled
                         ? <div className="flex justify-center">{sectorRow}</div>
-                        : <Link to={sector.path} onClick={() => setMobileOpen(false)}><div className="flex justify-center">{sectorRow}</div></Link>
+                        : <Link to={destination} onClick={() => setMobileOpen(false)}><div className="flex justify-center">{sectorRow}</div></Link>
                       }
                     </Tooltip>
                   ) : (
                     isDisabled
                       ? <div>{sectorRow}</div>
-                      : <Link to={sector.path} onClick={() => setMobileOpen(false)}>{sectorRow}</Link>
+                      : <Link to={destination} onClick={() => setMobileOpen(false)}>{sectorRow}</Link>
                   )}
 
-                  {!collapsed && isActive && !isDisabled && sector.subItems && (
+                  {!collapsed && isActive && !isDisabled && visibleSubItems.length > 0 && (
                     <div className="ml-3 mt-0.5 mb-1 pl-3 border-l border-white/10 space-y-0.5">
-                      {sector.subItems.map(item => {
+                      {visibleSubItems.map(item => {
                         const SubIcon = item.icon
                         const subActive = location.pathname === item.path
                         return (
@@ -272,9 +276,9 @@ export default function Layout({ children }) {
         <div className={`border-t border-white/10 flex-shrink-0 ${collapsed ? 'p-2' : 'p-3'}`}>
           {collapsed ? (
             <div className="flex flex-col items-center gap-2">
-              <Tooltip label={`${user?.name} — Ver perfil`}>
+              <Tooltip label={`${user?.nome} — Ver perfil`}>
                 <button onClick={() => navigate('/perfil')} className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center hover:ring-2 hover:ring-[#CE7028] transition-all">
-                  <UserAvatar photo={userPhoto} avatar={user?.avatar} size={9} />
+                  <UserAvatar user={user} size={36} textClassName="text-xs" />
                 </button>
               </Tooltip>
               <Tooltip label="Sair">
@@ -286,12 +290,10 @@ export default function Layout({ children }) {
           ) : (
             <>
               <button onClick={() => navigate('/perfil')} className="w-full flex items-center gap-3 mb-2 px-2 py-2 rounded hover:bg-white/10 transition-all group">
-                <UserAvatar photo={userPhoto} avatar={user?.avatar} size={8} />
+                <UserAvatar user={user} size={32} textClassName="text-xs" />
                 <div className="flex-1 min-w-0 text-left">
-                  <p className="text-white text-sm font-semibold truncate leading-tight">{user?.name}</p>
-                  <p className="text-white/40 text-xs capitalize truncate">
-                    {user?.role === 'gp' ? 'Gestão de Pessoas' : user?.role === 'presidente' ? 'Presidente' : user?.role}
-                  </p>
+                  <p className="text-white text-sm font-semibold truncate leading-tight">{user?.nome}</p>
+                  <p className="text-white/40 text-xs truncate">{user?.cargo}</p>
                 </div>
               </button>
               <button onClick={handleLogout} className="w-full flex items-center gap-2 px-3 py-2 rounded text-sm text-white/50 hover:bg-white/10 hover:text-white transition-all">
@@ -326,8 +328,21 @@ export default function Layout({ children }) {
             )}
           </div>
 
-          {/* Bell */}
-          <div className="relative">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={toggleTheme}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded border border-[#1E1E1E] bg-[#111111] text-gray-400 hover:text-white hover:border-[#CE7028]/60 hover:bg-[#161616] transition-all"
+              title={theme === 'dark' ? 'Ativar modo claro' : 'Ativar modo escuro'}
+              aria-label={theme === 'dark' ? 'Ativar modo claro' : 'Ativar modo escuro'}
+            >
+              {theme === 'dark' ? <Sun className="w-4 h-4 text-[#CE7028]" /> : <Moon className="w-4 h-4 text-[#044947]" />}
+              <span className="hidden sm:inline text-xs font-semibold">
+                {theme === 'dark' ? 'Claro' : 'Escuro'}
+              </span>
+            </button>
+
+            {/* Bell */}
+            <div className="relative">
             <button
               ref={bellRef}
               onClick={() => setShowNotifs(v => !v)}
@@ -368,7 +383,7 @@ export default function Layout({ children }) {
                       return (
                         <div
                           key={n.id}
-                          onClick={() => markRead(n.id)}
+                          onClick={() => markRead(n)}
                           className={`flex items-start gap-3 px-4 py-3.5 border-b border-[#1E1E1E]/50 hover:bg-white/3 transition-colors cursor-pointer ${!n.read ? 'bg-[#CE7028]/3' : ''}`}
                         >
                           <div className={`w-8 h-8 rounded border flex items-center justify-center flex-shrink-0 mt-0.5 ${config.cls}`}>
@@ -398,6 +413,7 @@ export default function Layout({ children }) {
                 )}
               </div>
             )}
+            </div>
           </div>
         </header>
 

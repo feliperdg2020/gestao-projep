@@ -1,60 +1,40 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import {
   Eye, EyeOff, Lock, Mail, AlertCircle, ChevronLeft,
   User, Briefcase, Building, CheckCircle, Clock, RefreshCw, KeyRound,
 } from 'lucide-react'
-import { ProjepSymbol, ProjepLogoFull } from '../components/ProjepLogo'
+import ProjepLogo from '../components/ProjepLogo'
+import { SETOR_OPTIONS } from '../data/setores'
+import { getDefaultPath } from '../config/accessControl'
 
-// ── Shared styles ─────────────────────────────────────────────
-const INPUT = "w-full bg-[#111111] border border-[#1E1E1E] rounded px-10 py-3 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-[#CE7028] transition-colors"
+// â”€â”€ Shared styles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const INPUT = "w-full bg-black/30 border border-white/[0.08] rounded px-10 py-3 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-[#CE7028]/80 focus:bg-black/40 transition-all"
 const INPUT_ICON = "absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600 pointer-events-none"
-const BTN_PRIMARY = "w-full bg-[#CE7028] hover:bg-[#B5611F] disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 rounded text-sm transition-colors flex items-center justify-center gap-2"
+const BTN_PRIMARY = "w-full bg-[#CE7028] hover:bg-[#DD7A31] disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 rounded text-sm transition-all duration-200 flex items-center justify-center gap-2 shadow-[0_10px_30px_rgba(206,112,40,0.18)] hover:shadow-[0_14px_36px_rgba(206,112,40,0.28)] hover:-translate-y-0.5"
 const BTN_GHOST = "text-[#FF882D] hover:text-[#CE7028] text-sm font-medium transition-colors"
 const LABEL = "block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2"
 
-const DEPARTMENTS = [
-  'Presidência', 'Adm. e Financeiro', 'Comercial',
-  'Projetos', 'Marketing', 'Gestão de Pessoas',
-]
-
-// ── Left brand panel ──────────────────────────────────────────
+// â”€â”€ Left brand panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function LeftPanel() {
   return (
-    <div className="hidden lg:flex w-5/12 bg-white flex-col items-center justify-between py-16 px-12 relative overflow-hidden">
-      <div className="absolute top-0 right-0 w-32 h-32 bg-[#044947]/5 rounded-bl-full" />
-      <div className="absolute bottom-0 left-0 w-24 h-24 bg-[#CE7028]/5 rounded-tr-full" />
+    <div className="login-enter flex min-h-[420px] lg:min-h-[620px] flex-col items-center justify-center relative">
+      <div className="absolute -top-24 -left-24 w-64 h-64 bg-[#044947]/20 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-0 right-0 w-44 h-44 bg-[#CE7028]/10 rounded-full blur-3xl pointer-events-none" />
 
-      <div className="relative z-10 flex flex-col items-center text-center w-full">
-        <ProjepLogoFull symbolSize={64} symbolColor="#CE7028" textColor="#044947" />
-
-        <div className="mt-12 w-full">
-          <div className="w-10 h-0.5 bg-[#CE7028] mx-auto mb-6" />
-          <h2 className="text-[#044947] text-xl font-bold leading-snug mb-3">
-            Sistema de Gestão Integrada
-          </h2>
-          <p className="text-gray-400 text-sm leading-relaxed max-w-xs mx-auto">
-            Plataforma centralizada para gerenciamento de setores, projetos e pessoas da empresa júnior.
-          </p>
-        </div>
-
-        <div className="mt-10 grid grid-cols-3 gap-3 w-full">
-          {[{ num: '6', label: 'Setores' }, { num: '100%', label: 'Integrado' }, { num: '24/7', label: 'Disponível' }].map(item => (
-            <div key={item.label} className="border border-gray-100 rounded p-3 text-center bg-gray-50">
-              <p className="text-[#044947] font-bold text-base">{item.num}</p>
-              <p className="text-gray-400 text-xs mt-0.5">{item.label}</p>
-            </div>
-          ))}
+      <div className="relative z-10 flex w-full items-center justify-center text-center">
+        <div className="projep-logo-stage">
+          <span className="projep-logo-halo" aria-hidden="true" />
+          <span className="projep-logo-orbit projep-logo-orbit-a" aria-hidden="true" />
+          <span className="projep-logo-orbit projep-logo-orbit-b" aria-hidden="true" />
+          <ProjepLogo width={440} height={278} textColor="#FFFFFF" animated className="relative z-10 w-[300px] sm:w-[390px] lg:w-[440px] h-auto" />
         </div>
       </div>
-
-      <p className="relative z-10 text-gray-300 text-xs">© 2026 PROJEP — Todos os direitos reservados</p>
     </div>
   )
 }
-
-// ── Error / Success alerts ────────────────────────────────────
+// â”€â”€ Error / Success alerts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function Alert({ type, msg }) {
   if (!msg) return null
   const isError = type === 'error'
@@ -66,12 +46,12 @@ function Alert({ type, msg }) {
   )
 }
 
-// ── Spinner ───────────────────────────────────────────────────
+// â”€â”€ Spinner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function Spinner() {
   return <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
 }
 
-// ── Back button ───────────────────────────────────────────────
+// â”€â”€ Back button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function BackBtn({ onClick }) {
   return (
     <button onClick={onClick} className="flex items-center gap-1.5 text-gray-500 hover:text-white text-sm mb-6 transition-colors">
@@ -80,7 +60,7 @@ function BackBtn({ onClick }) {
   )
 }
 
-// ── Main ──────────────────────────────────────────────────────
+// â”€â”€ Main â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function Login() {
   const { login, register, generateResetCode, verifyResetCode, resetPassword } = useAuth()
   const navigate = useNavigate()
@@ -111,7 +91,7 @@ export default function Login() {
 
   const go = (v) => { setView(v); setError(''); setSuccess('') }
 
-  // ── Login submit ──────────────────────────────────────────────
+  // â”€â”€ Login submit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleLogin = async (e) => {
     e.preventDefault()
     setError(''); setLoading(true)
@@ -119,8 +99,8 @@ export default function Login() {
     const result = login(loginEmail, loginPassword)
     setLoading(false)
     if (result.success) {
-      navigate(result.user.role === 'gp' ? '/gp' : '/comercial')
-    } else if (result.status === 'pending') {
+      navigate(getDefaultPath(result.user))
+    } else if (result.status === 'pendente') {
       setPendingUser(result.user)
       go('pending')
     } else {
@@ -130,7 +110,7 @@ export default function Login() {
 
   const demoLogin = (email) => { setLoginEmail(email); setLoginPassword('123456') }
 
-  // ── Register submit ───────────────────────────────────────────
+  // â”€â”€ Register submit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleRegister = (e) => {
     e.preventDefault()
     setError('')
@@ -147,7 +127,7 @@ export default function Login() {
     }
   }
 
-  // ── Forgot submit ─────────────────────────────────────────────
+  // â”€â”€ Forgot submit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleForgot = (e) => {
     e.preventDefault()
     setError('')
@@ -156,35 +136,35 @@ export default function Login() {
     go('verify')
   }
 
-  // ── Verify code submit ────────────────────────────────────────
+  // â”€â”€ Verify code submit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleVerify = (e) => {
     e.preventDefault()
     setError('')
-    if (!genCode) return setError('Email não encontrado. Verifique e tente novamente.')
+    if (!genCode) return setError('Código inválido ou expirado. Tente novamente.')
     const ok = verifyResetCode(resetEmail, verifyInput.trim())
     if (ok) { go('reset') } else { setError('Código incorreto ou expirado. Tente novamente.') }
   }
 
-  // ── Reset password submit ─────────────────────────────────────
+  // â”€â”€ Reset password submit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleReset = (e) => {
     e.preventDefault()
     setError('')
     if (newPass !== newPassConf) return setError('As senhas não coincidem')
     if (newPass.length < 6)     return setError('A senha deve ter pelo menos 6 caracteres')
-    resetPassword(resetEmail, newPass)
+    const result = resetPassword(resetEmail, newPass)
+    if (!result.success) return setError(result.error)
     go('login')
     setSuccess('Senha alterada com sucesso! Entre com sua nova senha.')
   }
 
-  // ── Render right panel ────────────────────────────────────────
+  // â”€â”€ Render right panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const renderRight = () => {
-    // ── LOGIN ──────────────────────────────────────────────────
+    // â”€â”€ LOGIN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (view === 'login') return (
       <div className="w-full max-w-sm">
-        <div className="lg:hidden mb-8"><ProjepLogoFull symbolSize={32} symbolColor="#CE7028" textColor="white" /></div>
         <div className="mb-8">
           <h1 className="text-white text-2xl font-bold tracking-tight">Acesso ao sistema</h1>
-          <p className="text-gray-500 text-sm mt-1">Entre com suas credenciais institucionais</p>
+          <p className="text-gray-500 text-sm mt-1">Entre com suas credenciais</p>
         </div>
 
         <Alert type="success" msg={success} />
@@ -234,8 +214,8 @@ export default function Login() {
           <p className="text-xs text-gray-600 mb-3 uppercase tracking-wider font-semibold">Acesso rápido — Demo</p>
           <div className="grid grid-cols-3 gap-2">
             {[
-              { label: 'Comercial',  email: 'comercial@gestaoej.com'      },
-              { label: 'GP',         email: 'gp@gestaoej.com'             },
+              { label: 'Comercial',  email: 'ana.silva@projep.com.br'     },
+              { label: 'GP',         email: 'bruno.costa@projep.com.br'   },
               { label: 'Presidente', email: 'felipedaniel.wk@gmail.com'   },
             ].map(d => (
               <button key={d.label} onClick={() => demoLogin(d.email)}
@@ -248,10 +228,9 @@ export default function Login() {
       </div>
     )
 
-    // ── REGISTER ───────────────────────────────────────────────
+    // â”€â”€ REGISTER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (view === 'register') return (
       <div className="w-full max-w-sm">
-        <div className="lg:hidden mb-6"><ProjepLogoFull symbolSize={28} symbolColor="#CE7028" textColor="white" /></div>
         <BackBtn onClick={() => go('login')} />
         <div className="mb-6">
           <h1 className="text-white text-2xl font-bold tracking-tight">Criar conta</h1>
@@ -299,7 +278,7 @@ export default function Login() {
               <select value={reg.department} onChange={setR('department')} required
                 className={`${INPUT} appearance-none`}>
                 <option value="">Selecione o setor</option>
-                {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+                {SETOR_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </div>
           </div>
@@ -324,7 +303,7 @@ export default function Login() {
       </div>
     )
 
-    // ── FORGOT ─────────────────────────────────────────────────
+    // â”€â”€ FORGOT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (view === 'forgot') return (
       <div className="w-full max-w-sm">
         <BackBtn onClick={() => go('login')} />
@@ -349,7 +328,7 @@ export default function Login() {
       </div>
     )
 
-    // ── VERIFY ─────────────────────────────────────────────────
+    // â”€â”€ VERIFY â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (view === 'verify') return (
       <div className="w-full max-w-sm">
         <BackBtn onClick={() => go('forgot')} />
@@ -388,7 +367,7 @@ export default function Login() {
       </div>
     )
 
-    // ── RESET ──────────────────────────────────────────────────
+    // â”€â”€ RESET â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (view === 'reset') return (
       <div className="w-full max-w-sm">
         <div className="mb-8">
@@ -420,7 +399,7 @@ export default function Login() {
       </div>
     )
 
-    // ── PENDING ────────────────────────────────────────────────
+    // â”€â”€ PENDING â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (view === 'pending') return (
       <div className="w-full max-w-sm text-center">
         <div className="flex flex-col items-center mb-8">
@@ -429,7 +408,7 @@ export default function Login() {
           </div>
           <h1 className="text-white text-2xl font-bold mb-2">Cadastro em análise</h1>
           <p className="text-gray-400 text-sm leading-relaxed">
-            Olá, <span className="text-white font-semibold">{pendingUser?.name || 'membro'}</span>!
+            Olá, <span className="text-white font-semibold">{pendingUser?.nome || 'membro'}</span>!
             <br /><br />
             Seu cadastro foi recebido com sucesso e está aguardando aprovação da diretoria da PROJEP.
             Assim que liberado, você receberá acesso completo ao sistema.
@@ -442,9 +421,9 @@ export default function Login() {
             <span className="text-yellow-400 text-xs font-semibold uppercase tracking-wider">Aguardando aprovação</span>
           </div>
           <div className="space-y-1.5 text-sm">
-            {pendingUser?.name       && <p className="text-gray-400"><span className="text-gray-600">Nome:</span> {pendingUser.name}</p>}
-            {pendingUser?.email      && <p className="text-gray-400"><span className="text-gray-600">Email:</span> {pendingUser.email}</p>}
-            {pendingUser?.department && <p className="text-gray-400"><span className="text-gray-600">Setor:</span> {pendingUser.department}</p>}
+            {pendingUser?.nome  && <p className="text-gray-400"><span className="text-gray-600">Nome:</span> {pendingUser.nome}</p>}
+            {pendingUser?.email && <p className="text-gray-400"><span className="text-gray-600">Email:</span> {pendingUser.email}</p>}
+            {pendingUser?.setor && <p className="text-gray-400"><span className="text-gray-600">Setor:</span> {pendingUser.setor}</p>}
           </div>
         </div>
 
@@ -458,11 +437,40 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] flex">
-      <LeftPanel />
-      <div className="flex-1 flex flex-col items-center justify-center p-8 bg-[#0A0A0A]">
-        {renderRight()}
+    <div className="min-h-screen bg-[#021F1E] relative overflow-hidden">
+      <div className="absolute inset-0 login-grid-pattern opacity-25 pointer-events-none" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_24%_45%,rgba(4,73,71,0.86)_0%,rgba(3,55,53,0.76)_24%,rgba(1,30,29,0.94)_58%,rgba(0,9,9,0.99)_100%)] pointer-events-none" />
+      <div className="absolute inset-0 bg-[linear-gradient(105deg,rgba(0,0,0,0.32)_0%,rgba(0,0,0,0.05)_34%,rgba(0,0,0,0.66)_72%,rgba(0,0,0,0.9)_100%)] pointer-events-none" />
+      <div className="absolute -top-[28rem] left-1/2 -translate-x-1/2 w-[70rem] h-[70rem] rounded-full border border-white/[0.07] pointer-events-none" />
+      <div className="absolute -top-52 -left-36 w-[38rem] h-[38rem] rounded-full bg-[#0C706A]/26 blur-[135px] pointer-events-none" />
+      <div className="absolute top-[30%] left-[20%] w-[32rem] h-[32rem] rounded-full bg-[#012B2A]/55 blur-[115px] pointer-events-none" />
+      <div className="absolute -bottom-72 -right-40 w-[42rem] h-[42rem] rounded-full bg-[#CE7028]/13 blur-[150px] pointer-events-none" />
+      <div className="absolute inset-0 shadow-[inset_0_0_260px_rgba(0,0,0,0.72)] pointer-events-none" />
+      <main className="relative z-10 min-h-screen max-w-7xl mx-auto px-5 sm:px-8 lg:px-12 py-10 lg:py-14 flex items-center">
+        <div className="w-full grid lg:grid-cols-[1.08fr_0.82fr] gap-10 lg:gap-20 items-center">
+          <LeftPanel />
+
+          <div className="login-form-enter flex justify-center lg:justify-end">
+            <div className="relative overflow-hidden w-full max-w-[470px] bg-[#061715]/88 border border-[#CE7028]/10 rounded-md p-6 sm:p-9 shadow-[0_35px_100px_rgba(0,0,0,0.58),0_0_70px_rgba(4,73,71,0.2)] backdrop-blur-2xl">
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(206,112,40,0.11),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.045),transparent_35%)] pointer-events-none" />
+              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#CE7028]/45 to-transparent pointer-events-none" />
+              <div className="relative z-10">
+                <div className="flex items-center gap-2 mb-7 text-[10px] uppercase tracking-[0.2em] font-semibold text-white/35">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.65)]" />
+                  Ambiente seguro PROJEP
+                </div>
+                {renderRight()}
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <div className="relative lg:absolute lg:bottom-5 lg:left-0 lg:right-0 z-10 text-center pb-6 lg:pb-0">
+        <p className="text-white/20 text-[10px] tracking-wide">© 2026 PROJEP · Sistema de Gestão Integrada</p>
       </div>
     </div>
   )
 }
+
+

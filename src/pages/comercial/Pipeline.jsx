@@ -10,7 +10,7 @@ const STAGES = [
   { id: 'fechado', label: 'Fechado', color: 'border-green-600', dot: 'bg-green-500', header: 'bg-green-500/5' },
 ]
 
-const EMPTY_LEAD = { company: '', contact: '', email: '', phone: '', value: '', stage: 'prospeccao', hunter: '', closer: '', notes: '', date: new Date().toISOString().split('T')[0] }
+const EMPTY_LEAD = { company: '', contact: '', email: '', phone: '', value: '', stage: 'prospeccao', hunterId: '', hunter: '', closerId: '', closer: '', notes: '', date: new Date().toISOString().split('T')[0] }
 
 const INPUT_CLS = "w-full bg-[#0D0D0D] border border-[#1E1E1E] rounded px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#CE7028] transition-colors placeholder-gray-700"
 const LABEL_CLS = "text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 block"
@@ -26,7 +26,7 @@ function LeadCard({ lead, onMove, onDelete, onEdit }) {
           <p className="text-white font-semibold text-sm truncate">{lead.company}</p>
           <p className="text-gray-600 text-xs mt-0.5">{lead.contact}</p>
         </div>
-        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
           <button onClick={() => onEdit(lead)} className="p-1 rounded text-gray-600 hover:text-[#FF882D] hover:bg-[#CE7028]/10 transition-all">
             <Edit2 className="w-3 h-3" />
           </button>
@@ -59,13 +59,15 @@ function LeadCard({ lead, onMove, onDelete, onEdit }) {
   )
 }
 
-function Modal({ lead, onClose, onSave }) {
+function Modal({ lead, hunters, closers, onClose, onSave }) {
   const [form, setForm] = useState(lead || EMPTY_LEAD)
+  const [error, setError] = useState('')
   const set = (k, v) => setForm(prev => ({ ...prev, [k]: v }))
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    onSave({ ...form, value: Number(form.value) })
+    const result = onSave({ ...form, value: Number(form.value) })
+    if (result?.success === false) return setError(result.error)
     onClose()
   }
 
@@ -100,11 +102,23 @@ function Modal({ lead, onClose, onSave }) {
             </div>
             <div>
               <label className={LABEL_CLS}>Hunter</label>
-              <input value={form.hunter} onChange={e => set('hunter', e.target.value)} className={INPUT_CLS} placeholder="Responsável pela prospecção" />
+              <select value={form.hunterId || ''} onChange={e => {
+                const hunter = hunters.find(item => item.id === e.target.value)
+                setForm(prev => ({ ...prev, hunterId: hunter?.id || '', hunter: hunter?.nome || '' }))
+              }} className={INPUT_CLS}>
+                <option value="">Sem hunter</option>
+                {hunters.map(hunter => <option key={hunter.id} value={hunter.id}>{hunter.nome}</option>)}
+              </select>
             </div>
             <div>
               <label className={LABEL_CLS}>Closer</label>
-              <input value={form.closer} onChange={e => set('closer', e.target.value)} className={INPUT_CLS} placeholder="Responsável pelo fechamento" />
+              <select value={form.closerId || ''} onChange={e => {
+                const closer = closers.find(item => item.id === e.target.value)
+                setForm(prev => ({ ...prev, closerId: closer?.id || '', closer: closer?.nome || '' }))
+              }} className={INPUT_CLS}>
+                <option value="">Sem closer</option>
+                {closers.map(closer => <option key={closer.id} value={closer.id}>{closer.nome}</option>)}
+              </select>
             </div>
             <div>
               <label className={LABEL_CLS}>Etapa</label>
@@ -121,6 +135,7 @@ function Modal({ lead, onClose, onSave }) {
               <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2} className={`${INPUT_CLS} resize-none`} placeholder="Anotações sobre o lead..." />
             </div>
           </div>
+          {error && <p className="text-red-400 text-xs">{error}</p>}
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded border border-[#1E1E1E] text-gray-500 hover:text-white hover:border-[#2A2A2A] text-sm transition-all">Cancelar</button>
             <button type="submit" className="flex-1 py-2.5 rounded bg-[#CE7028] hover:bg-[#B5611F] text-white font-semibold text-sm transition-colors">{lead?.id ? 'Salvar' : 'Criar Lead'}</button>
@@ -132,18 +147,23 @@ function Modal({ lead, onClose, onSave }) {
 }
 
 export default function Pipeline() {
-  const { leads, addLead, updateLead, deleteLead, moveLead } = useData()
+  const { commercial, leads, addLead, updateLead, deleteLead, moveLead } = useData()
   const [showModal, setShowModal] = useState(false)
   const [editLead, setEditLead] = useState(null)
 
   const handleSave = (data) => {
-    if (data.id) updateLead(data.id, data)
-    else addLead(data)
+    return data.id ? updateLead(data.id, data) : addLead(data)
   }
 
   const handleClose = () => {
     setShowModal(false)
     setEditLead(null)
+  }
+
+  const handleDelete = id => {
+    const lead = leads.find(item => item.id === id)
+    if (!window.confirm(`Remover o lead ${lead?.company || ''}? Esta ação não pode ser desfeita.`)) return
+    deleteLead(id)
   }
 
   const totalValue = leads.reduce((s, l) => s + Number(l.value), 0)
@@ -177,7 +197,7 @@ export default function Pipeline() {
                 </div>
                 <div className="bg-[#111111] border border-[#1E1E1E] border-t-0 p-3 space-y-3 min-h-[200px]">
                   {stageLeads.map(lead => (
-                    <LeadCard key={lead.id} lead={lead} onMove={moveLead} onDelete={deleteLead} onEdit={(l) => { setEditLead(l); setShowModal(true) }} />
+                    <LeadCard key={lead.id} lead={lead} onMove={moveLead} onDelete={handleDelete} onEdit={(l) => { setEditLead(l); setShowModal(true) }} />
                   ))}
                   {stageLeads.length === 0 && (
                     <div className="flex items-center justify-center h-24 text-gray-700 text-sm border border-dashed border-[#1E1E1E] rounded">
@@ -191,7 +211,7 @@ export default function Pipeline() {
         </div>
       </div>
 
-      {showModal && <Modal lead={editLead} onClose={handleClose} onSave={handleSave} />}
+      {showModal && <Modal lead={editLead} hunters={commercial.hunters || []} closers={commercial.closers || []} onClose={handleClose} onSave={handleSave} />}
     </div>
   )
 }

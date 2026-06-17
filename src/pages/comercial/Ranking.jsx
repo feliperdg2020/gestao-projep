@@ -1,5 +1,5 @@
 import { useData } from '../../contexts/DataContext'
-import { Trophy, Target } from 'lucide-react'
+import { BarChart3, DollarSign, FileCheck, Medal, Trophy, Target } from 'lucide-react'
 
 function buildRanking(leads, field) {
   const map = {}
@@ -15,9 +15,9 @@ function buildRanking(leads, field) {
 }
 
 const MEDAL_STYLES = [
-  { bg: 'bg-yellow-500/5', border: 'border-yellow-600/30', text: 'text-yellow-400', icon: '🥇' },
-  { bg: 'bg-gray-500/5', border: 'border-gray-600/30', text: 'text-gray-400', icon: '🥈' },
-  { bg: 'bg-orange-900/10', border: 'border-orange-800/30', text: 'text-orange-500', icon: '🥉' },
+  { bg: 'bg-yellow-500/5', border: 'border-yellow-600/30', text: 'text-yellow-400' },
+  { bg: 'bg-gray-500/5', border: 'border-gray-600/30', text: 'text-gray-400' },
+  { bg: 'bg-orange-900/10', border: 'border-orange-800/30', text: 'text-orange-500' },
 ]
 
 function RankingCard({ title, subtitle, icon: Icon, data, valueLabel = 'Valor em Pipeline' }) {
@@ -43,7 +43,7 @@ function RankingCard({ title, subtitle, icon: Icon, data, valueLabel = 'Valor em
             return (
               <div key={person.name} className={`flex items-center gap-4 p-4 ${style.bg} border ${style.border} rounded transition-all hover:border-opacity-50`}>
                 <div className={`w-9 h-9 rounded flex items-center justify-center text-base ${style.bg} border ${style.border} flex-shrink-0`}>
-                  {idx < 3 ? style.icon : <span className={`text-xs font-bold ${style.text}`}>#{idx + 1}</span>}
+                  {idx < 3 ? <Medal className={`w-4 h-4 ${style.text}`} /> : <span className={`text-xs font-bold ${style.text}`}>#{idx + 1}</span>}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-white font-semibold text-sm">{person.name}</p>
@@ -81,12 +81,12 @@ export default function Ranking() {
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
-          { emoji: '🏆', label: 'Contratos Fechados', value: totalClosed, cls: 'text-white' },
-          { emoji: '💰', label: 'Receita Total', value: `R$ ${totalRevenue.toLocaleString('pt-BR')}`, cls: 'text-green-400' },
-          { emoji: '📊', label: 'Ticket Médio', value: `R$ ${Math.round(avgTicket).toLocaleString('pt-BR')}`, cls: 'text-[#FF882D]' },
+          { Icon: FileCheck, label: 'Contratos Fechados', value: totalClosed, cls: 'text-white' },
+          { Icon: DollarSign, label: 'Receita Total', value: `R$ ${totalRevenue.toLocaleString('pt-BR')}`, cls: 'text-green-400' },
+          { Icon: BarChart3, label: 'Ticket Médio', value: `R$ ${Math.round(avgTicket).toLocaleString('pt-BR')}`, cls: 'text-[#FF882D]' },
         ].map(item => (
           <div key={item.label} className="bg-[#111111] border border-[#1E1E1E] rounded-md p-5 text-center">
-            <div className="text-2xl mb-2">{item.emoji}</div>
+            <item.Icon className="w-5 h-5 mx-auto mb-3 text-[#CE7028]" />
             <p className="text-gray-600 text-xs uppercase tracking-wider font-semibold mb-1">{item.label}</p>
             <p className={`text-2xl font-bold tabular-nums ${item.cls}`}>{item.value}</p>
           </div>

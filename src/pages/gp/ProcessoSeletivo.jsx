@@ -26,7 +26,7 @@ function CandidateCard({ candidate, onMove, onDelete, onEdit }) {
           <p className="text-white font-semibold text-sm">{candidate.name}</p>
           <p className="text-gray-600 text-xs mt-0.5">{candidate.role}</p>
         </div>
-        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
           <button onClick={() => onEdit(candidate)} className="p-1 rounded text-gray-600 hover:text-[#FF882D] hover:bg-[#CE7028]/10 transition-all">
             <Edit2 className="w-3 h-3" />
           </button>
@@ -77,11 +77,13 @@ function CandidateCard({ candidate, onMove, onDelete, onEdit }) {
 
 function Modal({ candidate, onClose, onSave }) {
   const [form, setForm] = useState(candidate || EMPTY)
+  const [error, setError] = useState('')
   const set = (k, v) => setForm(prev => ({ ...prev, [k]: v }))
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    onSave({ ...form, score: Number(form.score) })
+    const result = onSave({ ...form, score: Number(form.score) })
+    if (result?.success === false) return setError(result.error)
     onClose()
   }
 
@@ -121,6 +123,7 @@ function Modal({ candidate, onClose, onSave }) {
               <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={3} className={`${INPUT_CLS} resize-none`} />
             </div>
           </div>
+          {error && <p className="text-red-400 text-xs">{error}</p>}
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded border border-[#1E1E1E] text-gray-500 hover:text-white text-sm transition-all">Cancelar</button>
             <button type="submit" className="flex-1 py-2.5 rounded bg-[#CE7028] hover:bg-[#B5611F] text-white font-semibold text-sm transition-colors">{candidate?.id ? 'Salvar' : 'Adicionar'}</button>
@@ -138,8 +141,11 @@ export default function ProcessoSeletivo() {
 
   const handleMove = (id, stage) => updateCandidate(id, { stage })
   const handleSave = (data) => {
-    if (data.id) updateCandidate(data.id, data)
-    else addCandidate(data)
+    return data.id ? updateCandidate(data.id, data) : addCandidate(data)
+  }
+  const handleDelete = candidate => {
+    if (!window.confirm(`Remover ${candidate.name} do processo seletivo?`)) return
+    deleteCandidate(candidate.id)
   }
 
   const active = process.filter(p => p.stage !== 'reprovado')
@@ -170,7 +176,7 @@ export default function ProcessoSeletivo() {
                 </div>
                 <div className="bg-[#111111] border border-[#1E1E1E] border-t-0 p-3 space-y-3 min-h-[200px]">
                   {stageCandidates.map(c => (
-                    <CandidateCard key={c.id} candidate={c} onMove={handleMove} onDelete={deleteCandidate} onEdit={(c) => { setEditCandidate(c); setShowModal(true) }} />
+                    <CandidateCard key={c.id} candidate={c} onMove={handleMove} onDelete={() => handleDelete(c)} onEdit={(candidate) => { setEditCandidate(candidate); setShowModal(true) }} />
                   ))}
                   {stageCandidates.length === 0 && (
                     <div className="flex items-center justify-center h-24 text-gray-700 text-sm border border-dashed border-[#1E1E1E] rounded">
@@ -200,7 +206,7 @@ export default function ProcessoSeletivo() {
                   <p className="text-white text-sm font-semibold truncate">{c.name}</p>
                   <p className="text-gray-600 text-xs">{c.role}</p>
                 </div>
-                <button onClick={() => deleteCandidate(c.id)} className="p-1 text-gray-700 hover:text-red-400 transition-colors">
+                <button onClick={() => handleDelete(c)} className="p-1 text-gray-700 hover:text-red-400 transition-colors">
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
