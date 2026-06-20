@@ -4,9 +4,9 @@ import { useAuth } from '../../contexts/AuthContext'
 import UserAvatar from '../../components/UserAvatar'
 import { SETORES } from '../../data/setores'
 import { canDeleteMember, canManageMembers, canSendFeedback } from '../../config/authorization'
-import { Plus, X, Search, Users, Briefcase, Mail, Phone, Trash2, Edit2, MessageSquare, Star } from 'lucide-react'
+import { Plus, X, Search, Users, Briefcase, Mail, Phone, Trash2, Edit2, MessageSquare, Star, Camera, Upload, RotateCcw } from 'lucide-react'
 
-const EMPTY = { nome: '', cargo: '', setor: '', email: '', senha: '', telefone: '', status: 'ativo', dataCadastro: '', skills: [], avatar: '', projects: 0, performance: 80, usarDadosTemporarios: true }
+const EMPTY = { nome: '', cargo: '', setor: '', email: '', senha: '', telefone: '', status: 'ativo', dataCadastro: '', skills: [], avatar: '', fotoPerfil: null, projects: 0, performance: 80, usarDadosTemporarios: true }
 const INPUT_CLS = "w-full bg-[#0D0D0D] border border-[#1E1E1E] rounded px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#CE7028] transition-colors placeholder-gray-700"
 const LABEL_CLS = "text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 block"
 const idsEqual = (a, b) => String(a ?? '') === String(b ?? '')
@@ -15,9 +15,30 @@ function Modal({ member, onClose, onSave }) {
   const [form, setForm] = useState(member || EMPTY)
   const [skillInput, setSkillInput] = useState('')
   const [error, setError] = useState('')
+  const [photoError, setPhotoError] = useState('')
   const [temporaryCredentials, setTemporaryCredentials] = useState(null)
 
   const set = (k, v) => setForm(prev => ({ ...prev, [k]: v }))
+
+  const handlePhotoChange = event => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    setPhotoError('')
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      setPhotoError('Selecione um arquivo de imagem.')
+      return
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      setPhotoError('A imagem deve ter no máximo 8 MB.')
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = () => set('fotoPerfil', reader.result)
+    reader.onerror = () => setPhotoError('Não foi possível carregar a imagem.')
+    reader.readAsDataURL(file)
+  }
 
   const addSkill = (e) => {
     if (e.key === 'Enter' && skillInput.trim()) {
@@ -78,6 +99,47 @@ function Modal({ member, onClose, onSave }) {
           </div>
         ) : (
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div className="rounded border border-[#1E1E1E] bg-[#0D0D0D] p-4">
+            <label className={LABEL_CLS}>Foto do membro</label>
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                <UserAvatar
+                  user={form}
+                  size={76}
+                  fallbackColor="#044947"
+                  className="ring-2 ring-[#1E1E1E]"
+                  textClassName="text-lg"
+                />
+                <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-[#CE7028] border-2 border-[#0D0D0D] flex items-center justify-center">
+                  <Camera className="w-3.5 h-3.5 text-white" />
+                </div>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-white text-sm font-semibold">Adicionar foto de perfil</p>
+                <p className="text-gray-500 text-xs mt-1 leading-relaxed">
+                  A foto aparece no perfil, chat, cards de membros e, se for o usuário logado, também na sidebar.
+                </p>
+                <div className="flex flex-wrap gap-2 mt-3">
+                  <label className="inline-flex items-center gap-2 px-3 py-2 rounded border border-[#CE7028]/40 bg-[#CE7028]/10 text-[#FF882D] hover:bg-[#CE7028]/20 text-xs font-semibold cursor-pointer transition-colors">
+                    <Upload className="w-3.5 h-3.5" />
+                    Escolher foto
+                    <input type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
+                  </label>
+                  {form.fotoPerfil && (
+                    <button
+                      type="button"
+                      onClick={() => set('fotoPerfil', null)}
+                      className="inline-flex items-center gap-2 px-3 py-2 rounded border border-[#1E1E1E] text-gray-400 hover:text-white hover:border-[#2A2A2A] text-xs font-semibold transition-colors"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      Remover
+                    </button>
+                  )}
+                </div>
+                {photoError && <p className="text-red-400 text-xs mt-2">{photoError}</p>}
+              </div>
+            </div>
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
               <label className={LABEL_CLS}>Nome completo *</label>

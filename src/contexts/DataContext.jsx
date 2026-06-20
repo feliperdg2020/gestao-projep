@@ -370,7 +370,7 @@ export function DataProvider({ children }) {
     if (emailInUse(email, id)) {
       return { success: false, error: 'Já existe um membro com este email.' }
     }
-    const allowed = ['nome', 'cargo', 'email', 'telefone', 'status', 'dataCadastro', 'skills', 'projects', 'performance']
+    const allowed = ['nome', 'cargo', 'email', 'telefone', 'fotoPerfil', 'status', 'dataCadastro', 'skills', 'projects', 'performance']
     const fields = Object.fromEntries(Object.entries(data).filter(([key]) => allowed.includes(key)))
     fields.nome = fields.nome?.trim()
     fields.email = email
