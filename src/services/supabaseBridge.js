@@ -28,13 +28,34 @@ const appIdToUuid = (id, namespace) => {
   return `00000000-0000-4000-${namespace}-${hex}`
 }
 
+const stableUuid = (id, namespace) => {
+  const raw = `${id || ''}`
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(raw)) return raw
+
+  let hash = 1469598103934665603n
+  for (const char of raw) {
+    hash ^= BigInt(char.charCodeAt(0))
+    hash = (hash * 1099511628211n) & ((1n << 48n) - 1n)
+  }
+  const hex = `ff${hash.toString(16).padStart(12, '0').slice(-10)}`
+  return `00000000-0000-4000-${namespace}-${hex}`
+}
+
 const uuidToAppId = (uuid, namespace) => {
   const value = `${uuid || ''}`
   if (!value.includes(`-${namespace}-`)) return null
   const hex = value.split('-').at(-1)
   if (!hex) return null
+
+  const decoded = (hex.match(/.{1,2}/g) || [])
+    .map(part => String.fromCharCode(Number.parseInt(part, 16)))
+    .join('')
+    .replace(/^\0+/, '')
+
+  if (decoded && /^[\x20-\x7E]+$/.test(decoded)) return decoded
+
   const numeric = Number.parseInt(hex, 16)
-  return Number.isFinite(numeric) ? numeric : null
+  return Number.isFinite(numeric) ? String(numeric) : null
 }
 
 const dateOnly = value => value ? String(value).split('T')[0] : null
@@ -46,9 +67,9 @@ const logRemoteError = (action, error) => {
 }
 
 const userUuid = userId => appIdToUuid(userId, NS.user)
-const meetingUuid = meetingId => appIdToUuid(meetingId, NS.meeting)
-const messageUuid = messageId => appIdToUuid(messageId, NS.message)
-const notificationUuid = notificationId => appIdToUuid(notificationId, NS.notification)
+const meetingUuid = meetingId => stableUuid(meetingId, NS.meeting)
+const messageUuid = messageId => stableUuid(messageId, NS.message)
+const notificationUuid = notificationId => stableUuid(notificationId, NS.notification)
 const defaultEmailFromName = name => {
   const slug = `${name || 'membro'}`
     .normalize('NFD')
@@ -261,8 +282,11 @@ function notificationFromRemote(row, profileIdToUserId = new Map()) {
 }
 
 const mergeById = (local = [], remote = []) => {
-  const map = new Map(local.map(item => [item.id, item]))
-  remote.forEach(item => map.set(item.id, { ...(map.get(item.id) || {}), ...item }))
+  const map = new Map(local.map(item => [String(item.id), item]))
+  remote.forEach(item => {
+    const key = String(item.id)
+    map.set(key, { ...(map.get(key) || {}), ...item })
+  })
   return [...map.values()]
 }
 
