@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useData } from '../../contexts/DataContext'
 import { useAuth } from '../../contexts/AuthContext'
 import UserAvatar from '../../components/UserAvatar'
@@ -11,11 +11,159 @@ const INPUT_CLS = "w-full bg-[#0D0D0D] border border-[#1E1E1E] rounded px-3 py-2
 const LABEL_CLS = "text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 block"
 const idsEqual = (a, b) => String(a ?? '') === String(b ?? '')
 
+function boundPhotoOffset(candidate, naturalSize, zoom) {
+  if (!naturalSize.w || !naturalSize.h) return candidate
+  const coverScale = Math.max(200 / naturalSize.w, 200 / naturalSize.h)
+  const maxX = Math.max(0, (naturalSize.w * coverScale * zoom - 200) / 2)
+  const maxY = Math.max(0, (naturalSize.h * coverScale * zoom - 200) / 2)
+  return {
+    x: Math.max(-maxX, Math.min(maxX, candidate.x)),
+    y: Math.max(-maxY, Math.min(maxY, candidate.y)),
+  }
+}
+
+function PhotoCropModal({ src, memberName, onSave, onClose }) {
+  const [offset, setOffset] = useState({ x: 0, y: 0 })
+  const [zoom, setZoom] = useState(1)
+  const [naturalSize, setNaturalSize] = useState({ w: 0, h: 0 })
+  const [dragging, setDragging] = useState(false)
+  const dragStart = useRef(null)
+
+  useEffect(() => {
+    const handleMove = event => {
+      if (!dragging || !dragStart.current) return
+      setOffset(boundPhotoOffset({
+        x: dragStart.current.ox + event.clientX - dragStart.current.sx,
+        y: dragStart.current.oy + event.clientY - dragStart.current.sy,
+      }, naturalSize, zoom))
+    }
+    const handleUp = () => setDragging(false)
+    window.addEventListener('pointermove', handleMove)
+    window.addEventListener('pointerup', handleUp)
+    return () => {
+      window.removeEventListener('pointermove', handleMove)
+      window.removeEventListener('pointerup', handleUp)
+    }
+  }, [dragging, naturalSize, zoom])
+
+  const handlePointerDown = event => {
+    event.preventDefault()
+    setDragging(true)
+    dragStart.current = { sx: event.clientX, sy: event.clientY, ox: offset.x, oy: offset.y }
+  }
+
+  const handleSave = () => {
+    const SIZE = 256
+    const VIEWPORT = 200
+    const canvas = document.createElement('canvas')
+    canvas.width = SIZE
+    canvas.height = SIZE
+
+    const ctx = canvas.getContext('2d')
+    ctx.beginPath()
+    ctx.arc(SIZE / 2, SIZE / 2, SIZE / 2, 0, Math.PI * 2)
+    ctx.clip()
+
+    const image = new Image()
+    image.onload = () => {
+      const coverScale = Math.max(VIEWPORT / image.naturalWidth, VIEWPORT / image.naturalHeight)
+      const ratio = SIZE / VIEWPORT
+      const drawWidth = image.naturalWidth * coverScale * zoom * ratio
+      const drawHeight = image.naturalHeight * coverScale * zoom * ratio
+      const drawX = SIZE / 2 - drawWidth / 2 + offset.x * ratio
+      const drawY = SIZE / 2 - drawHeight / 2 + offset.y * ratio
+      ctx.drawImage(image, drawX, drawY, drawWidth, drawHeight)
+      onSave(canvas.toDataURL('image/jpeg', 0.9))
+    }
+    image.src = src
+  }
+
+  const coverScale = naturalSize.w ? Math.max(200 / naturalSize.w, 200 / naturalSize.h) : 1
+
+  return (
+    <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+      <div className="bg-[#111111] border border-[#1E1E1E] rounded-md w-full max-w-sm shadow-2xl">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#1E1E1E]">
+          <div>
+            <h3 className="text-white font-semibold text-sm">Enquadrar foto</h3>
+            <p className="text-gray-600 text-xs mt-0.5">{memberName || 'Novo membro'}</p>
+          </div>
+          <button type="button" onClick={onClose} className="text-gray-600 hover:text-white transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="p-6">
+          <div className="flex flex-col items-center gap-4 mb-6">
+            <div
+              className="relative overflow-hidden border-2 border-[#CE7028] shadow-[0_0_40px_rgba(206,112,40,0.15)]"
+              style={{
+                width: 200,
+                height: 200,
+                borderRadius: '50%',
+                cursor: dragging ? 'grabbing' : 'grab',
+                userSelect: 'none',
+                touchAction: 'none',
+              }}
+              onPointerDown={handlePointerDown}
+            >
+              <img
+                src={src}
+                alt="Prévia do enquadramento"
+                draggable={false}
+                onLoad={event => setNaturalSize({ w: event.target.naturalWidth, h: event.target.naturalHeight })}
+                style={{
+                  position: 'absolute',
+                  left: '50%',
+                  top: '50%',
+                  width: naturalSize.w ? naturalSize.w * coverScale : '100%',
+                  height: naturalSize.h ? naturalSize.h * coverScale : '100%',
+                  transform: `translate(-50%, -50%) translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,
+                  transformOrigin: 'center center',
+                  pointerEvents: 'none',
+                  maxWidth: 'none',
+                }}
+              />
+            </div>
+            <p className="text-gray-600 text-xs">Arraste a imagem dentro do círculo para reposicionar.</p>
+          </div>
+
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <label className={LABEL_CLS}>Zoom</label>
+              <span className="text-xs text-gray-500 tabular-nums">{zoom.toFixed(2)}x</span>
+            </div>
+            <input
+              type="range"
+              min="1"
+              max="3"
+              step="0.05"
+              value={zoom}
+              onChange={event => {
+                const nextZoom = Number.parseFloat(event.target.value)
+                setZoom(nextZoom)
+                setOffset(current => boundPhotoOffset(current, naturalSize, nextZoom))
+              }}
+              className="w-full h-1.5 rounded appearance-none cursor-pointer accent-[#CE7028]"
+            />
+          </div>
+
+          <div className="flex gap-2">
+            <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded border border-[#1E1E1E] text-gray-500 hover:text-white text-sm transition-all">Cancelar</button>
+            <button type="button" onClick={handleSave} className="flex-1 py-2.5 rounded bg-[#CE7028] hover:bg-[#B5611F] text-white font-semibold text-sm transition-colors">Salvar foto</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function Modal({ member, onClose, onSave }) {
   const [form, setForm] = useState(member || EMPTY)
   const [skillInput, setSkillInput] = useState('')
   const [error, setError] = useState('')
   const [photoError, setPhotoError] = useState('')
+  const [cropSrc, setCropSrc] = useState(null)
   const [temporaryCredentials, setTemporaryCredentials] = useState(null)
 
   const set = (k, v) => setForm(prev => ({ ...prev, [k]: v }))
@@ -35,7 +183,7 @@ function Modal({ member, onClose, onSave }) {
     }
 
     const reader = new FileReader()
-    reader.onload = () => set('fotoPerfil', reader.result)
+    reader.onload = () => setCropSrc(reader.result)
     reader.onerror = () => setPhotoError('Não foi possível carregar a imagem.')
     reader.readAsDataURL(file)
   }
@@ -65,6 +213,7 @@ function Modal({ member, onClose, onSave }) {
   }
 
   return (
+    <>
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-[#111111] border border-[#1E1E1E] rounded-md w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#1E1E1E] sticky top-0 bg-[#111111]">
@@ -227,6 +376,18 @@ function Modal({ member, onClose, onSave }) {
         )}
       </div>
     </div>
+    {cropSrc && (
+      <PhotoCropModal
+        src={cropSrc}
+        memberName={form.nome}
+        onClose={() => setCropSrc(null)}
+        onSave={photo => {
+          set('fotoPerfil', photo)
+          setCropSrc(null)
+        }}
+      />
+    )}
+    </>
   )
 }
 
