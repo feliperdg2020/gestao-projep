@@ -329,6 +329,52 @@ const mergeById = (local = [], remote = []) => {
   return [...map.values()]
 }
 
+const normalizeTimestamp = value => {
+  const time = new Date(value || 0).getTime()
+  return Number.isFinite(time) ? time : String(value || '')
+}
+
+const messageMergeKey = message => [
+  message.tipo || 'direta',
+  message.remetenteId || '',
+  message.destinatarioId || '',
+  message.texto || '',
+  normalizeTimestamp(message.timestamp),
+].join('|')
+
+const mergeMessages = (local = [], remote = []) => {
+  const items = []
+  const indexById = new Map()
+  const indexByIdentity = new Map()
+
+  const upsert = (message, preferIncoming = false) => {
+    const idKey = String(message.id)
+    const identityKey = messageMergeKey(message)
+    const existingIndex = indexById.has(idKey)
+      ? indexById.get(idKey)
+      : indexByIdentity.get(identityKey)
+
+    if (existingIndex != null) {
+      const merged = preferIncoming
+        ? { ...items[existingIndex], ...message }
+        : { ...message, ...items[existingIndex] }
+      items[existingIndex] = merged
+      indexById.set(String(merged.id), existingIndex)
+      indexByIdentity.set(messageMergeKey(merged), existingIndex)
+      return
+    }
+
+    const nextIndex = items.length
+    items.push(message)
+    indexById.set(idKey, nextIndex)
+    indexByIdentity.set(identityKey, nextIndex)
+  }
+
+  local.forEach(message => upsert(message, false))
+  remote.forEach(message => upsert(message, true))
+  return items.sort((a, b) => normalizeTimestamp(a.timestamp) - normalizeTimestamp(b.timestamp))
+}
+
 export async function bootstrapSupabase(db) {
   if (!isSupabaseConfigured || !supabase) return { enabled: false, reason: 'missing-env' }
 
@@ -540,7 +586,7 @@ export async function pullCommunication(db, profileIdToUserId) {
 
   db.mutate('comunicacao', current => ({
     ...current,
-    mensagens: mergeById(current.mensagens || [], (remoteMessages || []).map(row => messageFromRemote(row, profileIdToUserId))),
+    mensagens: mergeMessages(current.mensagens || [], (remoteMessages || []).map(row => messageFromRemote(row, profileIdToUserId))),
     notificacoes: mergeById(current.notificacoes || [], (remoteNotifications || []).map(row => notificationFromRemote(row, profileIdToUserId))),
   }))
 }
