@@ -17,6 +17,7 @@ import {
 const AuthContext = createContext(null)
 const RESET_KEY = 'ej_reset_code'
 const idsEqual = (a, b) => String(a ?? '') === String(b ?? '')
+const normalizeEmail = email => `${email || ''}`.trim().toLowerCase()
 const appIdToUuid = id => {
   const raw = `${id || ''}`
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(raw)) return raw
@@ -26,10 +27,41 @@ const appIdToUuid = id => {
   return `00000000-0000-4000-8001-${hex}`
 }
 
+function sessionKeyFor(user) {
+  if (!user) return null
+  if (user.supabaseId) return `supabase:${user.supabaseId}`
+  if (user.email) return `email:${normalizeEmail(user.email)}`
+  if (user.id != null) return `id:${user.id}`
+  return null
+}
+
 function safeUser(user) {
   if (!user) return null
   const safe = { ...user }
   delete safe.senha
+  safe._sessionKey = sessionKeyFor(user)
+  return safe
+}
+
+function findSessionUser(users, session) {
+  if (!session) return null
+  const storedKey = session._sessionKey || session.sessionKey
+  if (storedKey) {
+    return users.find(item => sessionKeyFor(item) === storedKey) || null
+  }
+  if (session.supabaseId) return users.find(item => idsEqual(item.supabaseId, session.supabaseId)) || null
+  if (session.email) return users.find(item => normalizeEmail(item.email) === normalizeEmail(session.email)) || null
+  if (session.id != null) return users.find(item => idsEqual(item.id, session.id)) || null
+  return null
+}
+
+function persistSession(user) {
+  const safe = safeUser(user)
+  if (!safe) {
+    localStorage.removeItem('ej_user')
+    return null
+  }
+  localStorage.setItem('ej_user', JSON.stringify(safe))
   return safe
 }
 
@@ -37,20 +69,18 @@ function readSession() {
   try {
     const session = JSON.parse(localStorage.getItem('ej_user'))
     if (!session?.id) return null
-    const current = db.get('usuarios').find(item => sameUserIdentity(item, session))
+    const current = findSessionUser(db.get('usuarios'), session)
     if (!current || current.status !== 'ativo') return null
-    const safe = safeUser(current)
-    localStorage.setItem('ej_user', JSON.stringify(safe))
-    return safe
+    return persistSession(current)
   } catch {
     return null
   }
 }
 
 function matchesEmail(user, email) {
-  const normalized = email.trim().toLowerCase()
-  return user.email?.toLowerCase() === normalized ||
-    (user.emailAliases || []).some(alias => alias.toLowerCase() === normalized)
+  const normalized = normalizeEmail(email)
+  return normalizeEmail(user.email) === normalized ||
+    (user.emailAliases || []).some(alias => normalizeEmail(alias) === normalized)
 }
 
 function sameUserIdentity(a, b) {
@@ -60,7 +90,7 @@ function sameUserIdentity(a, b) {
     idsEqual(a.supabaseId, b.id) ||
     idsEqual(a.id, b.supabaseId) ||
     appIdToUuid(a.id) === appIdToUuid(b.id) ||
-    (a.email && b.email && a.email.toLowerCase() === b.email.toLowerCase())
+    (a.email && b.email && normalizeEmail(a.email) === normalizeEmail(b.email))
 }
 
 function findUserByIdentity(users, identity) {
@@ -83,14 +113,12 @@ export function AuthProvider({ children }) {
     setUsers(nextUsers.map(safeUser))
     setUser(current => {
       if (!current) return null
-      const fresh = nextUsers.find(item => sameUserIdentity(item, current))
+      const fresh = findSessionUser(nextUsers, current)
       if (!fresh || fresh.status !== 'ativo') {
         localStorage.removeItem('ej_user')
         return null
       }
-      const safe = safeUser(fresh)
-      localStorage.setItem('ej_user', JSON.stringify(safe))
-      return safe
+      return persistSession(fresh)
     })
   }), [])
 
@@ -114,9 +142,8 @@ export function AuthProvider({ children }) {
     if (found.status === 'rejeitado') return { success: false, error: 'Cadastro reprovado pela diretoria. Contate o RH.' }
     if (found.status !== 'ativo') return { success: false, error: 'Conta inativa. Contate o administrador.' }
 
-    const safe = safeUser(found)
+    const safe = persistSession(found)
     setUser(safe)
-    localStorage.setItem('ej_user', JSON.stringify(safe))
     return { success: true, user: safe }
   }
 
