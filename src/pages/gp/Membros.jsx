@@ -6,7 +6,7 @@ import { SETORES } from '../../data/setores'
 import { canDeleteMember, canManageMembers, canSendFeedback } from '../../config/authorization'
 import { Plus, X, Search, Users, Briefcase, Mail, Phone, Trash2, Edit2, MessageSquare, Star } from 'lucide-react'
 
-const EMPTY = { nome: '', cargo: '', setor: '', email: '', senha: '', telefone: '', status: 'ativo', dataCadastro: '', skills: [], avatar: '', projects: 0, performance: 80 }
+const EMPTY = { nome: '', cargo: '', setor: '', email: '', senha: '', telefone: '', status: 'ativo', dataCadastro: '', skills: [], avatar: '', projects: 0, performance: 80, usarDadosTemporarios: true }
 const INPUT_CLS = "w-full bg-[#0D0D0D] border border-[#1E1E1E] rounded px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#CE7028] transition-colors placeholder-gray-700"
 const LABEL_CLS = "text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 block"
 
@@ -14,6 +14,7 @@ function Modal({ member, onClose, onSave }) {
   const [form, setForm] = useState(member || EMPTY)
   const [skillInput, setSkillInput] = useState('')
   const [error, setError] = useState('')
+  const [temporaryCredentials, setTemporaryCredentials] = useState(null)
 
   const set = (k, v) => setForm(prev => ({ ...prev, [k]: v }))
 
@@ -34,6 +35,10 @@ function Modal({ member, onClose, onSave }) {
       setError(result.error)
       return
     }
+    if (result?.temporaryCredentials) {
+      setTemporaryCredentials(result.temporaryCredentials)
+      return
+    }
     onClose()
   }
 
@@ -44,6 +49,33 @@ function Modal({ member, onClose, onSave }) {
           <h3 className="text-white font-semibold">{member?.id ? 'Editar Membro' : 'Novo Membro'}</h3>
           <button onClick={onClose} className="p-1 text-gray-500 hover:text-white"><X className="w-4 h-4" /></button>
         </div>
+        {temporaryCredentials ? (
+          <div className="p-6 space-y-5">
+            <div className="rounded border border-[#CE7028]/30 bg-[#CE7028]/10 p-4">
+              <p className="text-white font-semibold text-sm">Membro cadastrado com acesso temporário</p>
+              <p className="text-gray-400 text-xs mt-1 leading-relaxed">
+                Envie estes dados para o membro fazer o primeiro acesso. Depois ele troca email, telefone, foto e senha no perfil.
+              </p>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className={LABEL_CLS}>Email temporário</label>
+                <div className="bg-[#0D0D0D] border border-[#1E1E1E] rounded px-3 py-2.5 text-white text-sm font-mono">
+                  {temporaryCredentials.email}
+                </div>
+              </div>
+              <div>
+                <label className={LABEL_CLS}>Senha temporária</label>
+                <div className="bg-[#0D0D0D] border border-[#1E1E1E] rounded px-3 py-2.5 text-white text-sm font-mono">
+                  {temporaryCredentials.senha}
+                </div>
+              </div>
+            </div>
+            <button type="button" onClick={onClose} className="w-full py-2.5 rounded bg-[#CE7028] hover:bg-[#B5611F] text-white font-semibold text-sm transition-colors">
+              Concluir
+            </button>
+          </div>
+        ) : (
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
@@ -61,11 +93,29 @@ function Modal({ member, onClose, onSave }) {
                 {SETORES.map(setor => <option key={setor.id} value={setor.nome}>{setor.nome}</option>)}
               </select>
             </div>
+            {!member?.id && (
+              <div className="col-span-2 rounded border border-[#1E1E1E] bg-[#0D0D0D] p-3">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(form.usarDadosTemporarios)}
+                    onChange={e => set('usarDadosTemporarios', e.target.checked)}
+                    className="mt-1 accent-[#CE7028]"
+                  />
+                  <span>
+                    <span className="block text-white text-sm font-semibold">Gerar acesso temporário</span>
+                    <span className="block text-gray-500 text-xs mt-0.5">
+                      Use para cadastrar o membro agora. Ele troca os dados no próprio perfil depois.
+                    </span>
+                  </span>
+                </label>
+              </div>
+            )}
             <div>
               <label className={LABEL_CLS}>Email</label>
-              <input required type="email" value={form.email} onChange={e => set('email', e.target.value)} className={INPUT_CLS} />
+              <input required={!form.usarDadosTemporarios} disabled={form.usarDadosTemporarios && !member?.id} type="email" value={form.email} onChange={e => set('email', e.target.value)} className={`${INPUT_CLS} ${form.usarDadosTemporarios && !member?.id ? 'opacity-50 cursor-not-allowed' : ''}`} placeholder={form.usarDadosTemporarios && !member?.id ? 'Será gerado automaticamente' : ''} />
             </div>
-            {!member?.id && (
+            {!member?.id && !form.usarDadosTemporarios && (
               <div>
                 <label className={LABEL_CLS}>Senha inicial *</label>
                 <input required minLength={6} type="password" value={form.senha} onChange={e => set('senha', e.target.value)} className={INPUT_CLS} placeholder="Mínimo de 6 caracteres" />
@@ -111,6 +161,7 @@ function Modal({ member, onClose, onSave }) {
             <button type="submit" className="flex-1 py-2.5 rounded bg-[#CE7028] hover:bg-[#B5611F] text-white font-semibold text-sm transition-colors">{member?.id ? 'Salvar' : 'Adicionar'}</button>
           </div>
         </form>
+        )}
       </div>
     </div>
   )

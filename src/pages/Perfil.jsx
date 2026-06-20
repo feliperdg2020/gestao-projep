@@ -473,6 +473,14 @@ export default function Perfil() {
 
           {/* Header card */}
           <div className="bg-[#111111] border border-[#1E1E1E] rounded-md p-6">
+            {user?.precisaAtualizarDados && (
+              <div className="mb-5 rounded border border-[#CE7028]/30 bg-[#CE7028]/10 p-3 text-left">
+                <p className="text-white text-sm font-semibold">Complete seus dados</p>
+                <p className="text-gray-400 text-xs mt-1 leading-relaxed">
+                  Seu acesso foi criado com dados temporários. Atualize nome, email, WhatsApp, foto e senha.
+                </p>
+              </div>
+            )}
             {/* Photo */}
             <div className="flex flex-col items-center mb-5">
               <div
@@ -538,7 +546,11 @@ export default function Perfil() {
               <EditableField
                 icon={Mail} label="Email"
                 value={user?.email || ''}
-                onSave={val => updateCurrentUser({ email: val })}
+                onSave={val => updateCurrentUser({
+                  email: val,
+                  precisaAtualizarDados: false,
+                  emailTemporario: false,
+                })}
                 type="email"
               />
 

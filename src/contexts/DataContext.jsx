@@ -9,6 +9,16 @@ import {
   canPostAnnouncements,
   canSendFeedback,
 } from '../config/authorization'
+import {
+  bootstrapSupabase,
+  deleteMeetingFromSupabase,
+  deleteUserFromSupabase,
+  markRemoteNotificationRead,
+  syncMeetingToSupabase,
+  syncMessageToSupabase,
+  syncNotificationToSupabase,
+  syncUsersToSupabase,
+} from '../services/supabaseBridge'
 
 const DataContext = createContext(null)
 
@@ -29,6 +39,21 @@ function emailInUse(email, excludedUserId = null) {
       (member.emailAliases || []).some(alias => alias.toLowerCase() === normalized)
     )
   )
+}
+
+function createTemporaryCredentials(name = 'membro') {
+  const slug = name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '.')
+    .replace(/(^\.|\.$)/g, '')
+    .slice(0, 32) || 'membro'
+  const suffix = Math.floor(1000 + Math.random() * 9000)
+  return {
+    email: `${slug}.${suffix}@temporario.projep`,
+    senha: `projep${suffix}`,
+  }
 }
 
 function resolveCommercialUsers(commercial, members) {
@@ -191,19 +216,31 @@ export function DataProvider({ children }) {
     syncTaskDeadlineNotifications(projectData)
   }, [projectData])
 
+  useEffect(() => {
+    let mounted = true
+    bootstrapSupabase(db)
+      .then(result => {
+        if (mounted && result?.enabled) console.info('[Supabase] Sincronização inicial concluída.')
+      })
+      .catch(error => console.warn('[Supabase] Falha na sincronização inicial:', error.message || error))
+    return () => { mounted = false }
+  }, [])
+
   const resolvedCommercial = resolveCommercialUsers(commercial, members)
   const canUse = subareaKey => hasSubareaAccess(user, subareaKey)
 
   const addMember = member => {
     if (!canManageMembers(user)) return { success: false, error: 'Você não pode cadastrar membros.' }
-    const email = member.email?.trim().toLowerCase()
+    const temporaryCredentials = member.usarDadosTemporarios ? createTemporaryCredentials(member.nome) : null
+    const email = (temporaryCredentials?.email || member.email)?.trim().toLowerCase()
+    const senha = temporaryCredentials?.senha || member.senha
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return { success: false, error: 'Informe um email válido.' }
     }
     if (emailInUse(email)) {
       return { success: false, error: 'Já existe um membro com este email.' }
     }
-    if (!member.senha || member.senha.length < 6) {
+    if (!senha || senha.length < 6) {
       return { success: false, error: 'A senha inicial deve ter pelo menos 6 caracteres.' }
     }
     const canonicalSector = resolveSetor(member.setorId || member.setor)
@@ -225,10 +262,10 @@ export function DataProvider({ children }) {
     if (role === 'presidente') basePermissions.presidencia = true
 
     const created = db.insert('usuarios', null, {
-      senha: member.senha,
+      senha,
       dataCadastro: new Date().toISOString().split('T')[0],
       fotoPerfil: null,
-      telefone: '',
+      telefone: member.telefone || '',
       skills: [],
       performance: 0,
       projects: 0,
@@ -238,9 +275,18 @@ export function DataProvider({ children }) {
       setorId: canonicalSector?.id || member.setorId || null,
       setor: canonicalSector?.nome || member.setor || '',
       role,
+      precisaAtualizarDados: Boolean(member.usarDadosTemporarios),
+      emailTemporario: Boolean(member.usarDadosTemporarios),
       permissoes: normalizePermissions(member.permissoes || basePermissions, role),
     }).novoRegistro
-    return { success: true, user: publicUsers([created])[0] }
+    void syncUsersToSupabase(db.get('usuarios'))
+    return {
+      success: true,
+      user: publicUsers([created])[0],
+      temporaryCredentials: temporaryCredentials
+        ? { email: temporaryCredentials.email, senha: temporaryCredentials.senha }
+        : null,
+    }
   }
   const updateMember = (id, data) => {
     if (!canManageMembers(user)) return { success: false, error: 'Você não pode editar membros.' }
@@ -265,12 +311,14 @@ export function DataProvider({ children }) {
     fields.setorId = canonicalSector?.id || target.setorId
     fields.setor = canonicalSector?.nome || target.setor
     db.update('usuarios', null, id, fields)
+    void syncUsersToSupabase(db.get('usuarios'))
     return { success: true }
   }
   const deleteMember = id => {
     const target = db.get('usuarios').find(member => member.id === id)
     if (!canDeleteMember(user, target)) return { success: false, error: 'Você não pode remover este membro.' }
     db.removeUser(id)
+    void deleteUserFromSupabase(id)
     return { success: true }
   }
 
@@ -350,6 +398,7 @@ export function DataProvider({ children }) {
       responsavelId: responsibleIds[0] || null,
     }
     updateCommercialList('reunioes', current => [...current, created])
+    void syncMeetingToSupabase(created, user?.id)
     addNotification({
       usuarioId: null,
       modulo: 'comercial',
@@ -387,6 +436,7 @@ export function DataProvider({ children }) {
     if (updatedMeeting && addedResponsibleIds.length) {
       notifyMeetingAssignees(updatedMeeting, addedResponsibleIds)
     }
+    if (updatedMeeting) void syncMeetingToSupabase(updatedMeeting, user?.id)
     return updatedMeeting
       ? { success: true, meeting: updatedMeeting }
       : { success: false, error: 'Reuniao nao encontrada.' }
@@ -394,6 +444,7 @@ export function DataProvider({ children }) {
   const deleteMeeting = id => {
     if (!canUse('comercial.calendario')) return { success: false, error: 'Voce nao pode remover reunioes.' }
     updateCommercialList('reunioes', current => current.filter(meeting => meeting.id !== id))
+    void deleteMeetingFromSupabase(id)
     return { success: true }
   }
 
@@ -542,6 +593,7 @@ export function DataProvider({ children }) {
       ...current,
       notificacoes: [next, ...(current.notificacoes || [])],
     }))
+    void syncNotificationToSupabase(next)
     return next
   }
 
@@ -577,6 +629,7 @@ export function DataProvider({ children }) {
         fixado: false,
       }, ...(current.avisos || [])] : (current.avisos || []),
     }))
+    void syncMessageToSupabase(message)
 
     if (channelId === 'avisos') {
       addNotification({
@@ -611,6 +664,7 @@ export function DataProvider({ children }) {
       return { ...notification, lida: true }
     })
     db.set('comunicacao', { ...current, notificacoes: notifications })
+    void markRemoteNotificationRead(notificationId, true)
   }
 
   const markAllNotificationsRead = userId => {
@@ -623,6 +677,9 @@ export function DataProvider({ children }) {
       return { ...notification, lida: true }
     })
     db.set('comunicacao', { ...current, notificacoes: notifications })
+    notifications
+      .filter(notification => notification.usuarioId == null || notification.usuarioId === userId)
+      .forEach(notification => { void markRemoteNotificationRead(notification.id, true) })
   }
 
   return (

@@ -10,10 +10,10 @@ import { normalizePermissions }   from '../config/accessControl'
 import { resolveSetor }           from './setores'
 
 const KEYS = {
-  usuarios:      'ej_db_usuarios_v2',
+  usuarios:      'ej_db_usuarios_v3',
   comercial:     'ej_db_comercial_v1',
-  gestaoPessoas: 'ej_db_gp_v1',
-  comunicacao:   'ej_db_comunicacao_v1',
+  gestaoPessoas: 'ej_db_gp_v2',
+  comunicacao:   'ej_db_comunicacao_v2',
   projetos:      'ej_db_projetos_v1',
 }
 

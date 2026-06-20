@@ -7,6 +7,11 @@ import {
   canDeleteMember,
   canManagePermissions,
 } from '../config/authorization'
+import {
+  deleteUserFromSupabase,
+  syncNotificationToSupabase,
+  syncUsersToSupabase,
+} from '../services/supabaseBridge'
 
 const AuthContext = createContext(null)
 const RESET_KEY = 'ej_reset_code'
@@ -119,6 +124,7 @@ export function AuthProvider({ children }) {
     }
 
     persistUsers([...currentUsers, newUser])
+    void syncUsersToSupabase(db.get('usuarios'))
 
     const comunicacao = db.get('comunicacao')
     const notification = {
@@ -137,6 +143,7 @@ export function AuthProvider({ children }) {
       ...comunicacao,
       notificacoes: [notification, ...(comunicacao.notificacoes || [])],
     })
+    void syncNotificationToSupabase(notification)
 
     return { success: true, user: newUser }
   }
@@ -165,6 +172,7 @@ export function AuthProvider({ children }) {
     })
     if (!approved) return { success: false, error: 'Usuário não encontrado.' }
     persistUsers(updated)
+    void syncUsersToSupabase(db.get('usuarios'))
     db.mutate('comunicacao', current => ({
       ...current,
       notificacoes: [{
@@ -187,6 +195,7 @@ export function AuthProvider({ children }) {
       return { success: false, error: 'Você não tem permissão para reprovar usuários.' }
     }
     db.update('usuarios', null, userId, { status: 'rejeitado' })
+    void syncUsersToSupabase(db.get('usuarios'))
     return { success: true }
   }
 
@@ -199,6 +208,7 @@ export function AuthProvider({ children }) {
     db.update('usuarios', null, userId, {
       permissoes: normalizePermissions(permissions, target.role),
     })
+    void syncUsersToSupabase(db.get('usuarios'))
     return { success: true }
   }
 
@@ -208,6 +218,7 @@ export function AuthProvider({ children }) {
       return { success: false, error: 'Você não pode remover este membro.' }
     }
     db.removeUser(userId)
+    void deleteUserFromSupabase(userId)
     return { success: true }
   }
 
@@ -215,6 +226,7 @@ export function AuthProvider({ children }) {
     if (!user) return { success: false, error: 'Usuário não autenticado.' }
     const allowedFields = new Set([
       'nome', 'email', 'telefone', 'fotoPerfil', 'preferenciasNotificacao',
+      'precisaAtualizarDados', 'emailTemporario',
     ])
     const sanitized = Object.fromEntries(
       Object.entries(data).filter(([key]) => allowedFields.has(key))
@@ -236,6 +248,7 @@ export function AuthProvider({ children }) {
     if (typeof sanitized.telefone === 'string') sanitized.telefone = sanitized.telefone.trim()
 
     db.update('usuarios', null, user.id, sanitized)
+    void syncUsersToSupabase(db.get('usuarios'))
     return { success: true }
   }
 
@@ -276,6 +289,7 @@ export function AuthProvider({ children }) {
     if (!target) return { success: false, error: 'Não foi possível redefinir a senha.' }
     if (newPassword.length < 6) return { success: false, error: 'A nova senha deve ter pelo menos 6 caracteres.' }
     db.update('usuarios', null, target.id, { senha: newPassword })
+    void syncUsersToSupabase(db.get('usuarios'))
     localStorage.removeItem(RESET_KEY)
     return { success: true }
   }
@@ -289,6 +303,7 @@ export function AuthProvider({ children }) {
     if (newPassword.length < 6) return { success: false, error: 'A nova senha deve ter pelo menos 6 caracteres.' }
     if (newPassword === currentPassword) return { success: false, error: 'A nova senha deve ser diferente da senha atual.' }
     db.update('usuarios', null, user.id, { senha: newPassword })
+    void syncUsersToSupabase(db.get('usuarios'))
     return { success: true }
   }
 
