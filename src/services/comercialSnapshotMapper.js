@@ -206,6 +206,36 @@ function getCardAssigneePeople(card) {
   })).filter(item => item.name || item.email)
 }
 
+function normalizePipefyMember(item) {
+  const user = item?.user || item?.member || item?.person || item?.node || item
+  return {
+    id: user?.id || item?.id || '',
+    name: user?.name || user?.full_name || item?.name || item?.label || '',
+    email: String(user?.email || item?.email || '').trim().toLowerCase(),
+  }
+}
+
+function getPipeMembers(payload) {
+  const raw = payload?.raw || {}
+  const memberCandidates = [
+    payload?.pipeMembers,
+    payload?.pipefyMembers,
+    payload?.people,
+    payload?.members,
+    raw.pipeMembers,
+    raw.pipefyMembers,
+    raw.people,
+    raw.members,
+    raw.pipe?.members,
+    raw.data?.pipe?.members,
+    raw.data?.pipe?.members?.edges?.map(edge => edge.node),
+    payload?.pipe?.members,
+  ]
+  return (memberCandidates.find(Array.isArray) || [])
+    .map(normalizePipefyMember)
+    .filter(member => member.email || member.name)
+}
+
 function getResponsibleMember(card, type, memberIndex) {
   const fieldKeywords = type === 'hunter'
     ? ['hunter', 'prospector', 'responsavel prospeccao', 'responsável prospecção']
@@ -244,10 +274,20 @@ function buildBasePeople(type, members = [], commercial = {}) {
   return [...byUser.values()]
 }
 
-function buildTeamIndex(type, rows = [], members = []) {
+function buildTeamIndex(type, rows = [], members = [], pipeMembers = []) {
   const index = new Map()
   for (const row of rows) {
     const member = members.find(item => String(item.id) === String(row.userId))
+    const rowKeys = [
+      row.pipefyName,
+      ...(row.pipefyAliases || []),
+      member?.email,
+      member?.nome,
+    ].map(normalize).filter(Boolean)
+    const pipeMember = pipeMembers.find(item => {
+      const values = [item.email, item.name, item.id].map(normalize).filter(Boolean)
+      return values.some(value => rowKeys.some(key => value === key || value.includes(key) || key.includes(value)))
+    })
     const values = [
       row.pipefyName,
       ...(row.pipefyAliases || []),
@@ -255,6 +295,9 @@ function buildTeamIndex(type, rows = [], members = []) {
       member?.email,
       member?.supabaseId,
       member?.id,
+      pipeMember?.name,
+      pipeMember?.email,
+      pipeMember?.id,
     ]
     for (const value of values) {
       const key = normalize(value)
@@ -323,13 +366,14 @@ function findOrCreateRow(rows, member) {
   return null
 }
 
-function buildMetricsFromCards(cards, members, commercial) {
+function buildMetricsFromCards(cards, members, commercial, payload) {
   const pipeline = { ...EMPTY_PIPELINE }
   const funil = { ...EMPTY_FUNIL, leadsCadastrados: cards.length }
   const hunters = createHunterRows(members, commercial)
   const closers = createCloserRows(members, commercial)
-  const hunterIndex = buildTeamIndex('hunter', commercial.equipe?.hunters || [], members)
-  const closerIndex = buildTeamIndex('closer', commercial.equipe?.closers || [], members)
+  const pipeMembers = getPipeMembers(payload)
+  const hunterIndex = buildTeamIndex('hunter', commercial.equipe?.hunters || [], members, pipeMembers)
+  const closerIndex = buildTeamIndex('closer', commercial.equipe?.closers || [], members, pipeMembers)
   let receitaTotal = 0
 
   for (const card of cards) {
@@ -387,7 +431,7 @@ export function mapComercialSnapshot(payload, { members = [], commercial = {} } 
   // TODO: substituir este payload por chamadas normalizadas do Supabase quando
   // o n8n gravar cards e metadados separados por tabela.
   const cards = getCards(payload)
-  const computed = cards.length ? buildMetricsFromCards(cards, members, commercial) : null
+  const computed = cards.length ? buildMetricsFromCards(cards, members, commercial, payload) : null
   const funil = {
     ...EMPTY_FUNIL,
     ...(computed?.funil || {}),
@@ -457,33 +501,7 @@ export function extractPipefyPeopleFromSnapshot(payload) {
     if (!item.source.includes(source)) item.source = `${item.source}, ${source}`
   }
 
-  const normalizePipefyMember = item => {
-    const user = item?.user || item?.member || item?.person || item?.node || item
-    return {
-      name: user?.name || user?.full_name || item?.name || item?.label || '',
-      email: user?.email || item?.email || '',
-    }
-  }
-
-  const raw = payload?.raw || {}
-  const memberCandidates = [
-    payload?.pipeMembers,
-    payload?.pipefyMembers,
-    payload?.people,
-    payload?.members,
-    raw.pipeMembers,
-    raw.pipefyMembers,
-    raw.people,
-    raw.members,
-    raw.pipe?.members,
-    raw.data?.pipe?.members,
-    raw.data?.pipe?.members?.edges?.map(edge => edge.node),
-    payload?.pipe?.members,
-  ]
-  const pipeMembers = memberCandidates.find(Array.isArray) || []
-
-  pipeMembers
-    .map(normalizePipefyMember)
+  getPipeMembers(payload)
     .forEach(member => add({ ...member, source: 'Pessoa do pipe', count: 0 }))
 
   for (const row of payload?.hunters || []) {
