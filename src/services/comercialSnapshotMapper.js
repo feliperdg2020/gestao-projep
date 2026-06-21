@@ -322,11 +322,17 @@ export function mapComercialSnapshot(payload, { members = [], commercial = {} } 
   const computed = cards.length ? buildMetricsFromCards(cards, members, commercial) : null
   const funil = {
     ...EMPTY_FUNIL,
-    ...(payload.funil || {}),
     ...(computed?.funil || {}),
+    ...(payload.funil || {}),
   }
   funil.ligoesRealizadas = funil.ligoesRealizadas || funil.ligacoesRealizadas || 0
   funil.ligacoesRealizadas = funil.ligacoesRealizadas || funil.ligoesRealizadas || 0
+
+  const pipeline = {
+    ...EMPTY_PIPELINE,
+    ...(computed?.pipeline || {}),
+    ...(payload.pipeline || {}),
+  }
 
   return {
     id: payload.periodo?.id || 'pipefy-live',
@@ -343,15 +349,11 @@ export function mapComercialSnapshot(payload, { members = [], commercial = {} } 
       : createCloserRows(members, commercial)),
     kpis: {
       ...EMPTY_KPIS,
-      ...(payload.kpis || {}),
       ...(computed?.kpis || {}),
-      contratosFechados: computed?.kpis?.contratosFechados ?? payload.kpis?.contratosFechados ?? funil.contratosFechados ?? 0,
+      ...(payload.kpis || {}),
+      contratosFechados: payload.kpis?.contratosFechados ?? computed?.kpis?.contratosFechados ?? funil.contratosFechados ?? 0,
     },
-    pipeline: {
-      ...EMPTY_PIPELINE,
-      ...(payload.pipeline || {}),
-      ...(computed?.pipeline || {}),
-    },
+    pipeline,
     raw: payload.raw || {},
     fonte: payload.fonte || 'pipefy',
     pipe: payload.pipe || null,
