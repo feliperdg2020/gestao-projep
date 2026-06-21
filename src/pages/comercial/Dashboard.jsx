@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid, Legend,
@@ -9,6 +9,7 @@ import {
   Percent, Target,
 } from 'lucide-react'
 import { useData } from '../../contexts/DataContext'
+import { isSupabaseConfigured, supabase } from '../../lib/supabase'
 
 // ── Helpers ───────────────────────────────────────────────────
 const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) : 0)
@@ -23,6 +24,70 @@ const fmtDate = (iso) => {
 
 const avg = (arr, key) =>
   arr.length ? arr.reduce((s, x) => s + x[key], 0) / arr.length : 0
+
+const EMPTY_PERIOD = {
+  funil: {
+    leadsCadastrados: 0,
+    ligoesRealizadas: 0,
+    ligacoesRealizadas: 0,
+    reunioesMarcadas: 0,
+    reunioesRealizadas: 0,
+    propostas: 0,
+    negociacoes: 0,
+    contratosFechados: 0,
+  },
+  hunters: [],
+  closers: [],
+  kpis: {
+    ticketMedio: 0,
+    receitaTotal: 0,
+    contratosFechados: 0,
+    taxaConversao: 0,
+  },
+  pipeline: {
+    cadastro: 0,
+    naoContatados: 0,
+    perdidos: 0,
+    interesseFuturo: 0,
+    diagnostico: 0,
+    proposta: 0,
+    negociacao: 0,
+    ganhos: 0,
+  },
+}
+
+const normalizeFunil = funil => ({
+  ...EMPTY_PERIOD.funil,
+  ...(funil || {}),
+  ligoesRealizadas: funil?.ligoesRealizadas ?? funil?.ligacoesRealizadas ?? 0,
+})
+
+function normalizeSnapshotPayload(payload) {
+  if (!payload) return null
+  const funil = normalizeFunil(payload.funil)
+  return {
+    id: payload.periodo?.id || 'pipefy-live',
+    label: 'Pipefy ao vivo',
+    inicio: new Date().toISOString().split('T')[0],
+    fim: new Date().toISOString().split('T')[0],
+    ultimaAtualizacao: payload.periodo?.atualizadoEm || new Date().toISOString(),
+    funil,
+    hunters: Array.isArray(payload.hunters) ? payload.hunters : [],
+    closers: Array.isArray(payload.closers) ? payload.closers : [],
+    kpis: {
+      ...EMPTY_PERIOD.kpis,
+      ...(payload.kpis || {}),
+      contratosFechados: payload.kpis?.contratosFechados ?? funil.contratosFechados ?? 0,
+    },
+    pipeline: {
+      ...EMPTY_PERIOD.pipeline,
+      ...(payload.pipeline || {}),
+    },
+    raw: payload.raw || {},
+    fonte: payload.fonte || 'pipefy',
+    pipe: payload.pipe || null,
+  }
+}
 
 function calcDelta(curr, prev) {
   if (prev == null || prev === 0) return null
@@ -648,10 +713,61 @@ function findCurrentMonthIndex(months) {
 
 export default function ComercialDashboard() {
   const { commercial } = useData()
-  const { semanas = [], meses = [], aovivo } = commercial
+  const [remoteSnapshot, setRemoteSnapshot] = useState(null)
+  const [remoteStatus, setRemoteStatus] = useState({ loading: true, error: '' })
+  const remotePeriod = useMemo(() => normalizeSnapshotPayload(remoteSnapshot?.payload), [remoteSnapshot])
+  const dashboardData = useMemo(() => {
+    if (!remotePeriod) return commercial
+    return {
+      ...commercial,
+      aovivo: remotePeriod,
+    }
+  }, [commercial, remotePeriod])
+  const { semanas = [], meses = [], aovivo } = dashboardData
   const [viewMode, setViewMode] = useState('semanal')
   const [semaIdx,  setSemaIdx]  = useState(() => findCurrentWeekIndex(semanas))
   const [mesIdx,   setMesIdx]   = useState(() => findCurrentMonthIndex(meses))
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function fetchLatestSnapshot() {
+      if (!isSupabaseConfigured || !supabase) {
+        setRemoteStatus({ loading: false, error: 'Supabase não configurado. Usando dados locais.' })
+        return
+      }
+
+      setRemoteStatus({ loading: true, error: '' })
+      const { data, error } = await supabase
+        .from('comercial_dashboard_snapshots')
+        .select('id, payload, synced_at')
+        .order('synced_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (cancelled) return
+
+      if (error) {
+        setRemoteStatus({ loading: false, error: 'Não foi possível carregar dados do Pipefy. Usando fallback local.' })
+        console.warn('[ComercialDashboard] Falha ao carregar snapshot comercial:', error.message || error)
+        return
+      }
+
+      setRemoteSnapshot(data || null)
+      setRemoteStatus({
+        loading: false,
+        error: data ? '' : 'Nenhum snapshot encontrado. Usando dados locais.',
+      })
+      if (data) setViewMode('aovivo')
+    }
+
+    fetchLatestSnapshot()
+    const intervalId = window.setInterval(fetchLatestSnapshot, 60000)
+    return () => {
+      cancelled = true
+      window.clearInterval(intervalId)
+    }
+  }, [])
 
   // TODO: [Supabase] substituir por: supabase.from('comercial_semanas').select('*').order('inicio')
   const currentPeriod = useMemo(() => {
@@ -693,6 +809,26 @@ export default function ComercialDashboard() {
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight">Dashboard Comercial</h1>
           <p className="text-gray-500 text-sm mt-0.5">Análise de performance da equipe de vendas</p>
+          <div className="flex flex-wrap items-center gap-2 mt-2">
+            <span className={`inline-flex items-center gap-1.5 text-[10px] font-semibold px-2 py-1 rounded border ${
+              remotePeriod
+                ? 'text-green-400 bg-green-950/30 border-green-900/30'
+                : remoteStatus.loading
+                  ? 'text-yellow-400 bg-yellow-950/30 border-yellow-900/30'
+                  : 'text-gray-500 bg-[#111111] border-[#1E1E1E]'
+            }`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${remotePeriod ? 'bg-green-400' : remoteStatus.loading ? 'bg-yellow-400 animate-pulse' : 'bg-gray-600'}`} />
+              {remotePeriod ? 'Dados reais do Pipefy' : remoteStatus.loading ? 'Carregando Supabase' : 'Fallback local'}
+            </span>
+            {remoteSnapshot?.synced_at && (
+              <span className="text-[10px] text-gray-600">
+                Última sincronização: {new Date(remoteSnapshot.synced_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
+            {remoteStatus.error && !remotePeriod && (
+              <span className="text-[10px] text-gray-700">{remoteStatus.error}</span>
+            )}
+          </div>
         </div>
         <PeriodNav
           viewMode={viewMode} setViewMode={setViewMode}
