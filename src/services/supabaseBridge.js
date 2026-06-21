@@ -8,6 +8,8 @@ const NS = {
   message: '8003',
   notification: '8004',
 }
+const COMMERCIAL_CONFIG_ROW_ID = 'commercial-team-links'
+const COMMERCIAL_CONFIG_SOURCE = 'app_config'
 const MODULE_PERMISSION_KEY = '__module__'
 const REMOVED_DEMO_EMAILS = [
   'ana.silva@projep.com.br',
@@ -428,6 +430,77 @@ const mergeNotifications = (local = [], remote = []) => {
   return items.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0))
 }
 
+const normalizeCommercialTeamConfig = equipe => ({
+  hunters: Array.isArray(equipe?.hunters) ? equipe.hunters : [],
+  closers: Array.isArray(equipe?.closers) ? equipe.closers : [],
+})
+
+export async function syncCommercialTeamConfig(equipe) {
+  if (!isSupabaseConfigured || !supabase) return
+  const payload = { equipe: normalizeCommercialTeamConfig(equipe), updatedAt: new Date().toISOString() }
+  const { error } = await supabase
+    .from('notifications')
+    .upsert({
+      id: notificationUuid(COMMERCIAL_CONFIG_ROW_ID),
+      profile_id: null,
+      type: COMMERCIAL_CONFIG_SOURCE,
+      title: COMMERCIAL_CONFIG_ROW_ID,
+      description: JSON.stringify(payload),
+      link: null,
+      is_read: true,
+      created_at: payload.updatedAt,
+    }, { onConflict: 'id' })
+  logRemoteError('upsert commercial team config', error)
+}
+
+export async function pullCommercialTeamConfig(db) {
+  if (!isSupabaseConfigured || !supabase) return null
+
+  const { data: notificationConfig, error: notificationError } = await supabase
+    .from('notifications')
+    .select('description, created_at')
+    .eq('id', notificationUuid(COMMERCIAL_CONFIG_ROW_ID))
+    .maybeSingle()
+  logRemoteError('fetch commercial team config notification', notificationError)
+
+  let remoteEquipe = null
+  if (notificationConfig?.description) {
+    try {
+      remoteEquipe = JSON.parse(notificationConfig.description)?.equipe || null
+    } catch (error) {
+      console.warn('[Supabase] Configuração comercial inválida:', error.message || error)
+    }
+  }
+
+  if (!remoteEquipe) {
+    const { data, error } = await supabase
+      .from('comercial_dashboard_snapshots')
+      .select('payload, synced_at')
+      .eq('id', COMMERCIAL_CONFIG_ROW_ID)
+      .maybeSingle()
+    logRemoteError('fetch commercial team config snapshot fallback', error)
+    remoteEquipe = data?.payload?.equipe || null
+  }
+
+  if (remoteEquipe) {
+    const normalized = normalizeCommercialTeamConfig(remoteEquipe)
+    db.mutate('comercial', current => ({
+      ...current,
+      equipe: {
+        ...(current.equipe || {}),
+        ...normalized,
+      },
+    }))
+    return normalized
+  }
+
+  const localEquipe = normalizeCommercialTeamConfig(db.get('comercial')?.equipe)
+  if (localEquipe.hunters.length || localEquipe.closers.length) {
+    await syncCommercialTeamConfig(localEquipe)
+  }
+  return localEquipe
+}
+
 export async function bootstrapSupabase(db) {
   if (!isSupabaseConfigured || !supabase) return { enabled: false, reason: 'missing-env' }
 
@@ -454,6 +527,7 @@ export async function bootstrapSupabase(db) {
   const mergedUsers = await pullUsersFromSupabase(db)
 
   const profileIdToUserId = profileIdToUserIdMap(mergedUsers)
+  await pullCommercialTeamConfig(db)
   await syncLocalCommunicationToSupabase(db)
   await pullCommunication(db, profileIdToUserId)
   await pullMeetings(db, profileIdToUserId)
@@ -475,19 +549,15 @@ export async function pullUsersFromSupabase(db) {
   if (!profiles?.length) return localUsers
 
   const remoteUsers = profiles.map(profile => userFromProfile(profile, localUsers))
-  const missingLocalUsers = localUsers.filter(localUser =>
-    localUser.email &&
-    !remoteUsers.some(remoteUser => sameUserIdentity(localUser, remoteUser))
-  )
-  const mergedUsers = applyRemotePermissions([...remoteUsers, ...missingLocalUsers], permissions || [])
+  const mergedUsers = applyRemotePermissions(remoteUsers, permissions || [])
   db.set('usuarios', mergedUsers)
   const usersNeedingRemoteUpdate = remoteUsers.filter(user =>
     user.emailTemporario ||
     user.precisaAtualizarDados ||
     user.precisaSincronizarFoto
   )
-  if (missingLocalUsers.length || usersNeedingRemoteUpdate.length) {
-    await syncUsersToSupabase([...missingLocalUsers, ...usersNeedingRemoteUpdate])
+  if (usersNeedingRemoteUpdate.length) {
+    await syncUsersToSupabase(usersNeedingRemoteUpdate)
   }
   return mergedUsers
 }
@@ -640,7 +710,12 @@ export async function pullCommunication(db, profileIdToUserId) {
   db.mutate('comunicacao', current => ({
     ...current,
     mensagens: mergeMessages(current.mensagens || [], (remoteMessages || []).map(row => messageFromRemote(row, profileIdToUserId))),
-    notificacoes: mergeNotifications(current.notificacoes || [], (remoteNotifications || []).map(row => notificationFromRemote(row, profileIdToUserId))),
+    notificacoes: mergeNotifications(
+      current.notificacoes || [],
+      (remoteNotifications || [])
+        .filter(row => row.type !== COMMERCIAL_CONFIG_SOURCE)
+        .map(row => notificationFromRemote(row, profileIdToUserId)),
+    ),
   }))
 }
 
@@ -675,6 +750,7 @@ export async function pullRemoteState(db) {
   const mergedUsers = await pullUsersFromSupabase(db)
   const profileIdToUserId = profileIdToUserIdMap(mergedUsers)
   await Promise.all([
+    pullCommercialTeamConfig(db),
     pullCommunication(db, profileIdToUserId),
     pullMeetings(db, profileIdToUserId),
   ])
@@ -701,6 +777,7 @@ export function subscribeToSupabaseChanges(db, onChange) {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, scheduleSync)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'meetings' }, scheduleSync)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'meeting_responsibles' }, scheduleSync)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'comercial_dashboard_snapshots' }, scheduleSync)
     .subscribe()
 
   return () => {

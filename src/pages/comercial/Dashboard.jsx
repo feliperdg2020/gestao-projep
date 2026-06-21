@@ -662,21 +662,84 @@ function findCurrentMonthIndex(months) {
   return started >= 0 ? started : 0
 }
 
+const MONTHS_PT = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+]
+
+const isoDate = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+
+function getIsoWeek(date) {
+  const target = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
+  const day = target.getUTCDay() || 7
+  target.setUTCDate(target.getUTCDate() + 4 - day)
+  const yearStart = new Date(Date.UTC(target.getUTCFullYear(), 0, 1))
+  return Math.ceil((((target - yearStart) / 86400000) + 1) / 7)
+}
+
+function buildWeekRanges(referenceDate, count = 8) {
+  const reference = new Date(referenceDate)
+  const day = reference.getDay() || 7
+  const currentMonday = new Date(reference)
+  currentMonday.setDate(reference.getDate() - day + 1)
+  currentMonday.setHours(0, 0, 0, 0)
+
+  return Array.from({ length: count }, (_, index) => {
+    const monday = new Date(currentMonday)
+    monday.setDate(currentMonday.getDate() - ((count - 1 - index) * 7))
+    const friday = new Date(monday)
+    friday.setDate(monday.getDate() + 4)
+    const week = getIsoWeek(monday)
+    return {
+      id: `${monday.getFullYear()}-W${String(week).padStart(2, '0')}`,
+      label: `Semana ${week}`,
+      inicio: isoDate(monday),
+      fim: isoDate(friday),
+    }
+  })
+}
+
+function buildMonthRanges(referenceDate, count = 6) {
+  const reference = new Date(referenceDate)
+  return Array.from({ length: count }, (_, index) => {
+    const month = new Date(reference.getFullYear(), reference.getMonth() - (count - 1 - index), 1)
+    const end = new Date(month.getFullYear(), month.getMonth() + 1, 0)
+    return {
+      id: `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`,
+      label: `${MONTHS_PT[month.getMonth()]} ${month.getFullYear()}`,
+      inicio: isoDate(month),
+      fim: isoDate(end),
+    }
+  })
+}
+
+function buildRemoteDashboardData(snapshot, members, commercial) {
+  if (!snapshot?.payload) return null
+  const referenceDate = snapshot.synced_at || snapshot.payload?.periodo?.atualizadoEm || new Date().toISOString()
+  const aovivo = mapComercialSnapshot(snapshot.payload, { members, commercial })
+  const semanas = buildWeekRanges(referenceDate, 10)
+    .map(range => mapComercialSnapshot(snapshot.payload, { members, commercial, range }))
+  const meses = buildMonthRanges(referenceDate, 8)
+    .map(range => mapComercialSnapshot(snapshot.payload, { members, commercial, range }))
+
+  return {
+    ...commercial,
+    aovivo,
+    semanas,
+    meses,
+  }
+}
+
 export default function ComercialDashboard() {
   const { commercial, members } = useData()
   const [remoteSnapshot, setRemoteSnapshot] = useState(null)
   const [remoteStatus, setRemoteStatus] = useState({ loading: true, error: '' })
-  const remotePeriod = useMemo(
-    () => mapComercialSnapshot(remoteSnapshot?.payload, { members, commercial }),
+  const remoteDashboardData = useMemo(
+    () => buildRemoteDashboardData(remoteSnapshot, members, commercial),
     [commercial, members, remoteSnapshot],
   )
-  const dashboardData = useMemo(() => {
-    if (!remotePeriod) return commercial
-    return {
-      ...commercial,
-      aovivo: remotePeriod,
-    }
-  }, [commercial, remotePeriod])
+  const remotePeriod = remoteDashboardData?.aovivo || null
+  const dashboardData = remoteDashboardData || commercial
   const { semanas = [], meses = [], aovivo } = dashboardData
   const [viewMode, setViewMode] = useState('semanal')
   const [semaIdx,  setSemaIdx]  = useState(() => findCurrentWeekIndex(semanas))
@@ -695,6 +758,7 @@ export default function ComercialDashboard() {
       const { data, error } = await supabase
         .from('comercial_dashboard_snapshots')
         .select('id, payload, synced_at')
+        .eq('source', 'pipefy')
         .order('synced_at', { ascending: false })
         .limit(1)
         .maybeSingle()
@@ -712,7 +776,12 @@ export default function ComercialDashboard() {
         loading: false,
         error: data ? '' : 'Nenhum snapshot encontrado. Usando dados locais.',
       })
-      if (data) setViewMode('aovivo')
+      if (data) {
+        const referenceDate = data.synced_at || data.payload?.periodo?.atualizadoEm || new Date().toISOString()
+        setSemaIdx(findCurrentWeekIndex(buildWeekRanges(referenceDate, 10)))
+        setMesIdx(findCurrentMonthIndex(buildMonthRanges(referenceDate, 8)))
+        setViewMode('aovivo')
+      }
     }
 
     fetchLatestSnapshot()

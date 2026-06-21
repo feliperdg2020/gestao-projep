@@ -18,6 +18,7 @@ import {
   markRemoteNotificationRead,
   pullRemoteState,
   subscribeToSupabaseChanges,
+  syncCommercialTeamConfig,
   syncMeetingToSupabase,
   syncMessageToSupabase,
   syncNotificationToSupabase,
@@ -70,7 +71,7 @@ function createTemporaryCredentials(name = 'membro') {
 }
 
 function resolveCommercialUsers(commercial, members) {
-  const findMember = id => members.find(member => idsEqual(member.id, id))
+  const findMember = id => members.find(member => matchesUserId(id, member))
   const mapTeamMember = (item, prefix) => {
     const member = findMember(item.userId)
     return {
@@ -406,6 +407,7 @@ export function DataProvider({ children }) {
     const target = db.get('usuarios').find(member => idsEqual(member.id, id))
     if (!canDeleteMember(user, target)) return { success: false, error: 'Você não pode remover este membro.' }
     db.removeUser(id)
+    void syncCommercialTeamConfig(db.get('comercial')?.equipe)
     void deleteUserFromSupabase(id)
     return { success: true }
   }
@@ -429,13 +431,18 @@ export function DataProvider({ children }) {
       active: entry.active !== false,
     })).filter(entry => entry.userId && entry.pipefyName)
 
-    db.mutate('comercial', current => ({
-      ...current,
-      equipe: {
+    let nextEquipe = null
+    db.mutate('comercial', current => {
+      nextEquipe = {
         ...(current.equipe || {}),
         [role]: normalizedEntries,
-      },
-    }))
+      }
+      return {
+        ...current,
+        equipe: nextEquipe,
+      }
+    })
+    void syncCommercialTeamConfig(nextEquipe)
     return { success: true }
   }
 

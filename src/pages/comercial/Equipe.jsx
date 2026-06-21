@@ -24,6 +24,9 @@ const ROLE_META = {
 const emptyForm = { id: null, userId: '', pipefyName: '', pipefyAliases: '', active: true }
 
 const idsEqual = (a, b) => String(a ?? '') === String(b ?? '')
+const memberMatchesId = (member, id) =>
+  idsEqual(member?.id, id) ||
+  idsEqual(member?.supabaseId, id)
 
 function normalizeEntry(entry) {
   return {
@@ -68,7 +71,7 @@ function TeamTable({ role, entries, members, onEdit, onRemove, onToggle }) {
             </thead>
             <tbody>
               {entries.map(entry => {
-                const member = members.find(item => idsEqual(item.id, entry.userId))
+                const member = members.find(item => memberMatchesId(item, entry.userId))
                 return (
                   <tr key={entry.id} className="border-b border-[#0D0D0D] hover:bg-[#0D0D0D]/60 transition-colors">
                     <td className="px-5 py-3">
@@ -132,6 +135,7 @@ export default function EquipeComercial() {
       const { data, error } = await supabase
         .from('comercial_dashboard_snapshots')
         .select('payload, synced_at')
+        .eq('source', 'pipefy')
         .order('synced_at', { ascending: false })
         .limit(1)
         .maybeSingle()

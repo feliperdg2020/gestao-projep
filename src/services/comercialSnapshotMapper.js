@@ -34,6 +34,7 @@ const normalize = value => String(value || '')
   .trim()
 
 const EMAIL_REGEX = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi
+const idsEqual = (a, b) => String(a ?? '') === String(b ?? '')
 
 const includesAny = (value, words) => {
   const normalized = normalize(value)
@@ -50,13 +51,44 @@ const toNumber = value => {
   return Number(normalized) || 0
 }
 
-const getInitials = name => String(name || '?')
-  .split(/\s+/)
-  .filter(Boolean)
-  .map(part => part[0])
-  .join('')
-  .slice(0, 2)
-  .toUpperCase()
+const toDateOnly = date => {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null
+  const normalized = new Date(date)
+  normalized.setHours(0, 0, 0, 0)
+  return normalized
+}
+
+const parseDateValue = value => {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const parsed = parseDateValue(item)
+      if (parsed) return parsed
+    }
+    return null
+  }
+
+  if (value && typeof value === 'object') {
+    return parseDateValue(value.date || value.datetime || value.value || value.label || value.name)
+  }
+
+  const text = String(value || '').trim()
+  if (!text) return null
+
+  const br = text.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?\b/)
+  if (br) {
+    const [, day, month, year, hour = '0', minute = '0'] = br
+    return toDateOnly(new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute)))
+  }
+
+  const iso = text.match(/\b(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}):(\d{2}))?\b/)
+  if (iso) {
+    const [, year, month, day, hour = '0', minute = '0'] = iso
+    return toDateOnly(new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute)))
+  }
+
+  const native = new Date(text)
+  return Number.isNaN(native.getTime()) ? null : toDateOnly(native)
+}
 
 function getCards(payload) {
   const raw = payload?.raw || {}
@@ -111,6 +143,59 @@ function getFieldValues(card, keywords) {
     .filter(Boolean)
 }
 
+function getCardDate(card) {
+  const prioritizedLabels = [
+    ['data de ligacao', 'data de ligação', 'data do contato', 'data contato', 'data da ligacao', 'data da ligação'],
+    ['data e hora da diagnostica', 'data e hora da diagnóstica', 'data da diagnostica', 'data da diagnóstica'],
+    ['data e hora da reuniao de proposta', 'data e hora da reunião de proposta', 'data da proposta'],
+    ['data de criacao', 'data de criação', 'created at', 'created_at'],
+  ]
+
+  for (const labels of prioritizedLabels) {
+    for (const value of getFieldValues(card, labels)) {
+      const parsed = parseDateValue(value)
+      if (parsed) return parsed
+    }
+  }
+
+  const directDates = [
+    card?.created_at,
+    card?.createdAt,
+    card?.updated_at,
+    card?.updatedAt,
+    card?.due_date,
+    card?.dueDate,
+  ]
+  for (const value of directDates) {
+    const parsed = parseDateValue(value)
+    if (parsed) return parsed
+  }
+
+  for (const field of getCardFields(card)) {
+    if (!includesAny(field.label, ['data', 'date'])) continue
+    const parsed = parseDateValue(field.value)
+    if (parsed) return parsed
+  }
+
+  return null
+}
+
+const memberMatchesId = (member, id) =>
+  idsEqual(member?.id, id) ||
+  idsEqual(member?.supabaseId, id)
+
+function filterCardsByRange(cards, range) {
+  if (!range?.inicio || !range?.fim) return cards
+  const start = parseDateValue(range.inicio)
+  const end = parseDateValue(range.fim)
+  if (!start || !end) return cards
+  end.setHours(23, 59, 59, 999)
+  return cards.filter(card => {
+    const cardDate = getCardDate(card)
+    return cardDate && cardDate >= start && cardDate <= end
+  })
+}
+
 function getStageName(card) {
   return card?.current_phase?.name ||
     card?.currentPhase?.name ||
@@ -161,36 +246,6 @@ function wasNoShow(card) {
   return includesAny(getMeetingStatus(card), ['no-show', 'noshow', 'nao compareceu', 'não compareceu'])
 }
 
-function buildMemberIndex(members = []) {
-  const index = new Map()
-  for (const member of members) {
-    const values = [
-      member.id,
-      member.supabaseId,
-      member.nome,
-      member.name,
-      member.email,
-      ...(member.emailAliases || []),
-    ]
-    for (const value of values) {
-      const key = normalize(value)
-      if (key) index.set(key, member)
-    }
-  }
-  return index
-}
-
-function matchMember(value, index) {
-  const normalized = normalize(value)
-  if (!normalized) return null
-  if (index.has(normalized)) return index.get(normalized)
-
-  for (const [key, member] of index.entries()) {
-    if (normalized.includes(key) || key.includes(normalized)) return member
-  }
-  return null
-}
-
 function getCardAssignees(card) {
   const assignees = card?.assignees || card?.members || card?.responsibles || []
   if (!Array.isArray(assignees)) return []
@@ -236,27 +291,11 @@ function getPipeMembers(payload) {
     .filter(member => member.email || member.name)
 }
 
-function getResponsibleMember(card, type, memberIndex) {
-  const fieldKeywords = type === 'hunter'
-    ? ['hunter', 'prospector', 'responsavel prospeccao', 'responsável prospecção']
-    : ['closer', 'fechador', 'responsavel fechamento', 'responsável fechamento']
-
-  const fieldValue = getFieldValue(card, fieldKeywords)
-  const fieldMember = matchMember(fieldValue, memberIndex)
-  if (fieldMember) return fieldMember
-
-  for (const assignee of getCardAssignees(card)) {
-    const member = matchMember(assignee, memberIndex)
-    if (member) return member
-  }
-  return null
-}
-
 function buildBasePeople(type, members = [], commercial = {}) {
   const configured = (commercial.equipe?.[type === 'hunter' ? 'hunters' : 'closers'] || [])
     .filter(item => item.active !== false)
     .map(item => {
-      const member = members.find(candidate => String(candidate.id) === String(item.userId))
+      const member = members.find(candidate => memberMatchesId(candidate, item.userId))
       return {
         id: item.id || `${type}-${member?.id || item.userId}`,
         userId: item.userId || member?.id,
@@ -277,7 +316,7 @@ function buildBasePeople(type, members = [], commercial = {}) {
 function buildTeamIndex(type, rows = [], members = [], pipeMembers = []) {
   const index = new Map()
   for (const row of rows) {
-    const member = members.find(item => String(item.id) === String(row.userId))
+    const member = members.find(item => memberMatchesId(item, row.userId))
     const rowKeys = [
       row.pipefyName,
       ...(row.pipefyAliases || []),
@@ -425,17 +464,19 @@ function buildMetricsFromCards(cards, members, commercial, payload) {
   }
 }
 
-export function mapComercialSnapshot(payload, { members = [], commercial = {} } = {}) {
+export function mapComercialSnapshot(payload, { members = [], commercial = {}, range = null } = {}) {
   if (!payload) return null
 
   // TODO: substituir este payload por chamadas normalizadas do Supabase quando
   // o n8n gravar cards e metadados separados por tabela.
-  const cards = getCards(payload)
-  const computed = cards.length ? buildMetricsFromCards(cards, members, commercial, payload) : null
+  const allCards = getCards(payload)
+  const cards = filterCardsByRange(allCards, range)
+  const hasRange = Boolean(range?.inicio && range?.fim)
+  const computed = allCards.length ? buildMetricsFromCards(cards, members, commercial, payload) : null
   const funil = {
     ...EMPTY_FUNIL,
     ...(computed?.funil || {}),
-    ...(payload.funil || {}),
+    ...(hasRange ? {} : (payload.funil || {})),
   }
   funil.ligoesRealizadas = funil.ligoesRealizadas || funil.ligacoesRealizadas || 0
   funil.ligacoesRealizadas = funil.ligacoesRealizadas || funil.ligoesRealizadas || 0
@@ -443,14 +484,14 @@ export function mapComercialSnapshot(payload, { members = [], commercial = {} } 
   const pipeline = {
     ...EMPTY_PIPELINE,
     ...(computed?.pipeline || {}),
-    ...(payload.pipeline || {}),
+    ...(hasRange ? {} : (payload.pipeline || {})),
   }
 
   return {
-    id: payload.periodo?.id || 'pipefy-live',
-    label: payload.periodo?.label || 'Pipefy ao vivo',
-    inicio: new Date().toISOString().split('T')[0],
-    fim: new Date().toISOString().split('T')[0],
+    id: range?.id || payload.periodo?.id || 'pipefy-live',
+    label: range?.label || payload.periodo?.label || 'Pipefy ao vivo',
+    inicio: range?.inicio || new Date().toISOString().split('T')[0],
+    fim: range?.fim || new Date().toISOString().split('T')[0],
     ultimaAtualizacao: payload.periodo?.atualizadoEm || new Date().toISOString(),
     funil,
     hunters: computed?.hunters || (Array.isArray(payload.hunters) && payload.hunters.length
@@ -462,14 +503,17 @@ export function mapComercialSnapshot(payload, { members = [], commercial = {} } 
     kpis: {
       ...EMPTY_KPIS,
       ...(computed?.kpis || {}),
-      ...(payload.kpis || {}),
-      contratosFechados: payload.kpis?.contratosFechados ?? computed?.kpis?.contratosFechados ?? funil.contratosFechados ?? 0,
+      ...(hasRange ? {} : (payload.kpis || {})),
+      contratosFechados: hasRange
+        ? (computed?.kpis?.contratosFechados ?? funil.contratosFechados ?? 0)
+        : (payload.kpis?.contratosFechados ?? computed?.kpis?.contratosFechados ?? funil.contratosFechados ?? 0),
     },
     pipeline,
     raw: payload.raw || {},
     fonte: payload.fonte || 'pipefy',
     pipe: payload.pipe || null,
     cardsMapeados: cards.length,
+    totalCardsSnapshot: allCards.length,
   }
 }
 

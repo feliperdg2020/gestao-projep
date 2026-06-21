@@ -10,12 +10,14 @@ import {
 import {
   deleteUserFromSupabase,
   pullUsersFromSupabase,
+  syncCommercialTeamConfig,
   syncNotificationToSupabase,
   syncUsersToSupabase,
 } from '../services/supabaseBridge'
 
 const AuthContext = createContext(null)
 const RESET_KEY = 'ej_reset_code'
+const SESSION_KEY = 'ej_user'
 const idsEqual = (a, b) => String(a ?? '') === String(b ?? '')
 const normalizeEmail = email => `${email || ''}`.trim().toLowerCase()
 const appIdToUuid = id => {
@@ -58,16 +60,19 @@ function findSessionUser(users, session) {
 function persistSession(user) {
   const safe = safeUser(user)
   if (!safe) {
-    localStorage.removeItem('ej_user')
+    sessionStorage.removeItem(SESSION_KEY)
+    localStorage.removeItem(SESSION_KEY)
     return null
   }
-  localStorage.setItem('ej_user', JSON.stringify(safe))
+  sessionStorage.setItem(SESSION_KEY, JSON.stringify(safe))
+  localStorage.removeItem(SESSION_KEY)
   return safe
 }
 
 function readSession() {
   try {
-    const session = JSON.parse(localStorage.getItem('ej_user'))
+    const raw = sessionStorage.getItem(SESSION_KEY) || localStorage.getItem(SESSION_KEY)
+    const session = raw ? JSON.parse(raw) : null
     if (!session?.id) return null
     const current = findSessionUser(db.get('usuarios'), session)
     if (!current || current.status !== 'ativo') return null
@@ -115,7 +120,8 @@ export function AuthProvider({ children }) {
       if (!current) return null
       const fresh = findSessionUser(nextUsers, current)
       if (!fresh || fresh.status !== 'ativo') {
-        localStorage.removeItem('ej_user')
+        sessionStorage.removeItem(SESSION_KEY)
+        localStorage.removeItem(SESSION_KEY)
         return null
       }
       return persistSession(fresh)
@@ -149,7 +155,8 @@ export function AuthProvider({ children }) {
 
   const logout = () => {
     setUser(null)
-    localStorage.removeItem('ej_user')
+    sessionStorage.removeItem(SESSION_KEY)
+    localStorage.removeItem(SESSION_KEY)
   }
 
   const register = ({ name, email, password, department, jobTitle }) => {
@@ -288,6 +295,7 @@ export function AuthProvider({ children }) {
       return { success: false, error: 'Você não pode remover este membro.' }
     }
     db.removeUser(userId)
+    void syncCommercialTeamConfig(db.get('comercial')?.equipe)
     void deleteUserFromSupabase(userId)
     return { success: true }
   }
