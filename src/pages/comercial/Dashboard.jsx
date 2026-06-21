@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { useData } from '../../contexts/DataContext'
 import { isSupabaseConfigured, supabase } from '../../lib/supabase'
+import { mapComercialSnapshot } from '../../services/comercialSnapshotMapper'
 
 // ── Helpers ───────────────────────────────────────────────────
 const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) : 0)
@@ -24,70 +25,6 @@ const fmtDate = (iso) => {
 
 const avg = (arr, key) =>
   arr.length ? arr.reduce((s, x) => s + x[key], 0) / arr.length : 0
-
-const EMPTY_PERIOD = {
-  funil: {
-    leadsCadastrados: 0,
-    ligoesRealizadas: 0,
-    ligacoesRealizadas: 0,
-    reunioesMarcadas: 0,
-    reunioesRealizadas: 0,
-    propostas: 0,
-    negociacoes: 0,
-    contratosFechados: 0,
-  },
-  hunters: [],
-  closers: [],
-  kpis: {
-    ticketMedio: 0,
-    receitaTotal: 0,
-    contratosFechados: 0,
-    taxaConversao: 0,
-  },
-  pipeline: {
-    cadastro: 0,
-    naoContatados: 0,
-    perdidos: 0,
-    interesseFuturo: 0,
-    diagnostico: 0,
-    proposta: 0,
-    negociacao: 0,
-    ganhos: 0,
-  },
-}
-
-const normalizeFunil = funil => ({
-  ...EMPTY_PERIOD.funil,
-  ...(funil || {}),
-  ligoesRealizadas: funil?.ligoesRealizadas ?? funil?.ligacoesRealizadas ?? 0,
-})
-
-function normalizeSnapshotPayload(payload) {
-  if (!payload) return null
-  const funil = normalizeFunil(payload.funil)
-  return {
-    id: payload.periodo?.id || 'pipefy-live',
-    label: 'Pipefy ao vivo',
-    inicio: new Date().toISOString().split('T')[0],
-    fim: new Date().toISOString().split('T')[0],
-    ultimaAtualizacao: payload.periodo?.atualizadoEm || new Date().toISOString(),
-    funil,
-    hunters: Array.isArray(payload.hunters) ? payload.hunters : [],
-    closers: Array.isArray(payload.closers) ? payload.closers : [],
-    kpis: {
-      ...EMPTY_PERIOD.kpis,
-      ...(payload.kpis || {}),
-      contratosFechados: payload.kpis?.contratosFechados ?? funil.contratosFechados ?? 0,
-    },
-    pipeline: {
-      ...EMPTY_PERIOD.pipeline,
-      ...(payload.pipeline || {}),
-    },
-    raw: payload.raw || {},
-    fonte: payload.fonte || 'pipefy',
-    pipe: payload.pipe || null,
-  }
-}
 
 function calcDelta(curr, prev) {
   if (prev == null || prev === 0) return null
@@ -712,10 +649,13 @@ function findCurrentMonthIndex(months) {
 }
 
 export default function ComercialDashboard() {
-  const { commercial } = useData()
+  const { commercial, members } = useData()
   const [remoteSnapshot, setRemoteSnapshot] = useState(null)
   const [remoteStatus, setRemoteStatus] = useState({ loading: true, error: '' })
-  const remotePeriod = useMemo(() => normalizeSnapshotPayload(remoteSnapshot?.payload), [remoteSnapshot])
+  const remotePeriod = useMemo(
+    () => mapComercialSnapshot(remoteSnapshot?.payload, { members, commercial }),
+    [commercial, members, remoteSnapshot],
+  )
   const dashboardData = useMemo(() => {
     if (!remotePeriod) return commercial
     return {
