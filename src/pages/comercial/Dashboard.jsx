@@ -468,6 +468,13 @@ function HuntersSection({ hunters, prevHunters, prevLabel }) {
             </tr>
           </thead>
           <tbody>
+            {hunters.length === 0 && (
+              <tr>
+                <td colSpan={6} className="py-6 text-center text-gray-600">
+                  Nenhum hunter configurado. Cadastre vínculos em Comercial &gt; Equipe.
+                </td>
+              </tr>
+            )}
             {hunters.map((h) => {
               const taxa = pct(h.reunioesRealizadas, h.contatadas)
               return (
@@ -487,7 +494,7 @@ function HuntersSection({ hunters, prevHunters, prevLabel }) {
                 </tr>
               )
             })}
-            <tr className="border-t border-[#2A2A2A] bg-[#0D0D0D]/40">
+            {hunters.length > 0 && <tr className="border-t border-[#2A2A2A] bg-[#0D0D0D]/40">
               <td className="py-2.5 pr-4 font-bold text-gray-500 text-[10px] uppercase tracking-wider">
                 <span className="inline-flex items-center">
                   Média geral
@@ -500,7 +507,7 @@ function HuntersSection({ hunters, prevHunters, prevLabel }) {
               <td className="py-2.5 pr-4 text-gray-500 font-bold">
                 {pct(sumKey(hunters, 'reunioesRealizadas'), sumKey(hunters, 'contatadas'))}%
               </td>
-            </tr>
+            </tr>}
           </tbody>
         </table>
       </div>
@@ -572,6 +579,13 @@ function ClosersSection({ closers, prevClosers, prevLabel }) {
             </tr>
           </thead>
           <tbody>
+            {closers.length === 0 && (
+              <tr>
+                <td colSpan={6} className="py-6 text-center text-gray-600">
+                  Nenhum closer configurado. Cadastre vínculos em Comercial &gt; Equipe.
+                </td>
+              </tr>
+            )}
             {closers.map((c) => {
               const taxa = pct(c.contratosFechados, c.reunioesRealizadas)
               return (
@@ -595,7 +609,7 @@ function ClosersSection({ closers, prevClosers, prevLabel }) {
                 </tr>
               )
             })}
-            <tr className="border-t border-[#2A2A2A] bg-[#0D0D0D]/40">
+            {closers.length > 0 && <tr className="border-t border-[#2A2A2A] bg-[#0D0D0D]/40">
               <td className="py-2.5 pr-4 font-bold text-gray-500 text-[10px] uppercase tracking-wider">
                 <span className="inline-flex items-center">
                   Média geral
@@ -608,7 +622,7 @@ function ClosersSection({ closers, prevClosers, prevLabel }) {
               <td className="py-2.5 pr-4 text-gray-500 font-bold">
                 {pct(sumKey(closers, 'contratosFechados'), sumKey(closers, 'reunioesRealizadas'))}%
               </td>
-            </tr>
+            </tr>}
           </tbody>
         </table>
       </div>

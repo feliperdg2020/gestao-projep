@@ -79,10 +79,34 @@ function getCardFields(card) {
   }))
 }
 
+function unpackFieldValue(value) {
+  if (Array.isArray(value)) return value.flatMap(unpackFieldValue)
+  if (typeof value !== 'string') return [value]
+  const trimmed = value.trim()
+  if (!trimmed) return []
+  if ((trimmed.startsWith('[') && trimmed.endsWith(']')) || (trimmed.startsWith('{') && trimmed.endsWith('}'))) {
+    try {
+      const parsed = JSON.parse(trimmed)
+      return Array.isArray(parsed) ? parsed.flatMap(unpackFieldValue) : [parsed.name || parsed.email || parsed.label || trimmed]
+    } catch {
+      return [trimmed]
+    }
+  }
+  return [trimmed]
+}
+
 function getFieldValue(card, keywords) {
   const found = getCardFields(card).find(field => includesAny(field.label, keywords))
   if (!found) return ''
-  return Array.isArray(found.value) ? found.value.join(', ') : String(found.value || '')
+  return unpackFieldValue(found.value).join(', ')
+}
+
+function getFieldValues(card, keywords) {
+  return getCardFields(card)
+    .filter(field => includesAny(field.label, keywords))
+    .flatMap(field => unpackFieldValue(field.value))
+    .map(value => String(value || '').trim())
+    .filter(Boolean)
 }
 
 function getStageName(card) {
@@ -187,36 +211,73 @@ function getResponsibleMember(card, type, memberIndex) {
   return null
 }
 
-function isCommercialMember(member) {
-  const text = `${member?.setorId || ''} ${member?.setor || ''} ${member?.cargo || ''} ${member?.role || ''}`
-  return includesAny(text, ['comercial', 'hunter', 'closer', 'diretor comercial', 'vendas'])
-}
-
 function buildBasePeople(type, members = [], commercial = {}) {
-  const configured = (commercial[type === 'hunter' ? 'hunters' : 'closers'] || [])
+  const configured = (commercial.equipe?.[type === 'hunter' ? 'hunters' : 'closers'] || [])
+    .filter(item => item.active !== false)
     .map(item => {
       const member = members.find(candidate => String(candidate.id) === String(item.userId))
       return {
         id: item.id || `${type}-${member?.id || item.userId}`,
         userId: item.userId || member?.id,
-        nome: member?.nome || item.nome,
+        nome: member?.nome || item.nome || item.pipefyName,
+        pipefyName: item.pipefyName || '',
+        pipefyAliases: Array.isArray(item.pipefyAliases) ? item.pipefyAliases : [],
       }
     })
 
-  const commercialMembers = members
-    .filter(isCommercialMember)
-    .map(member => ({
-      id: `${type}-${member.id}`,
-      userId: member.id,
-      nome: member.nome,
-    }))
-
   const byUser = new Map()
-  for (const person of [...configured, ...commercialMembers]) {
+  for (const person of configured) {
     const key = String(person.userId || person.nome || person.id)
     if (!byUser.has(key) && person.nome) byUser.set(key, person)
   }
   return [...byUser.values()]
+}
+
+function buildTeamIndex(type, rows = [], members = []) {
+  const index = new Map()
+  for (const row of rows) {
+    const member = members.find(item => String(item.id) === String(row.userId))
+    const values = [
+      row.pipefyName,
+      ...(row.pipefyAliases || []),
+      member?.nome,
+      member?.email,
+      member?.supabaseId,
+      member?.id,
+    ]
+    for (const value of values) {
+      const key = normalize(value)
+      if (key) index.set(key, { ...member, id: row.userId || member?.id, nome: member?.nome || row.nome || row.pipefyName })
+    }
+  }
+  return index
+}
+
+function matchTeamValue(value, index) {
+  const normalized = normalize(value)
+  if (!normalized) return null
+  if (index.has(normalized)) return index.get(normalized)
+  for (const [key, member] of index.entries()) {
+    if (normalized.includes(key) || key.includes(normalized)) return member
+  }
+  return null
+}
+
+function getResponsibleTeamMember(card, type, teamIndex) {
+  const fieldKeywords = type === 'hunter'
+    ? ['hunter', 'prospector', 'responsavel prospeccao', 'responsável prospecção', 'responsavel', 'responsável']
+    : ['closer', 'fechador', 'email do closer', 'responsavel fechamento', 'responsável fechamento']
+
+  const values = [
+    ...getFieldValues(card, fieldKeywords),
+    ...getCardAssignees(card),
+  ]
+
+  for (const value of values) {
+    const member = matchTeamValue(value, teamIndex)
+    if (member) return member
+  }
+  return null
 }
 
 function createHunterRows(members, commercial) {
@@ -243,25 +304,21 @@ function createCloserRows(members, commercial) {
   }))
 }
 
-function findOrCreateRow(rows, member, type) {
+function findOrCreateRow(rows, member) {
   if (!member) return null
   const userId = member.id
   let row = rows.find(item => String(item.userId) === String(userId))
   if (row) return row
-
-  row = type === 'hunter'
-    ? { id: `hunter-${userId}`, userId, nome: member.nome, contatadas: 0, reunioesMarcadas: 0, reunioesRealizadas: 0, noShows: 0 }
-    : { id: `closer-${userId}`, userId, nome: member.nome, reunioesRealizadas: 0, noShows: 0, emNegociacao: 0, contratosFechados: 0 }
-  rows.push(row)
-  return row
+  return null
 }
 
 function buildMetricsFromCards(cards, members, commercial) {
-  const memberIndex = buildMemberIndex(members)
   const pipeline = { ...EMPTY_PIPELINE }
   const funil = { ...EMPTY_FUNIL, leadsCadastrados: cards.length }
   const hunters = createHunterRows(members, commercial)
   const closers = createCloserRows(members, commercial)
+  const hunterIndex = buildTeamIndex('hunter', commercial.equipe?.hunters || [], members)
+  const closerIndex = buildTeamIndex('closer', commercial.equipe?.closers || [], members)
   let receitaTotal = 0
 
   for (const card of cards) {
@@ -279,7 +336,7 @@ function buildMetricsFromCards(cards, members, commercial) {
       receitaTotal += getCardValue(card)
     }
 
-    const hunter = findOrCreateRow(hunters, getResponsibleMember(card, 'hunter', memberIndex), 'hunter')
+    const hunter = findOrCreateRow(hunters, getResponsibleTeamMember(card, 'hunter', hunterIndex))
     if (hunter) {
       hunter.contatadas += 1
       if (wasMeetingScheduled(card)) hunter.reunioesMarcadas += 1
@@ -287,7 +344,7 @@ function buildMetricsFromCards(cards, members, commercial) {
       if (wasNoShow(card)) hunter.noShows += 1
     }
 
-    const closer = findOrCreateRow(closers, getResponsibleMember(card, 'closer', memberIndex), 'closer')
+    const closer = findOrCreateRow(closers, getResponsibleTeamMember(card, 'closer', closerIndex))
     if (closer) {
       if (wasMeetingDone(card)) closer.reunioesRealizadas += 1
       if (wasNoShow(card)) closer.noShows += 1
@@ -359,4 +416,38 @@ export function mapComercialSnapshot(payload, { members = [], commercial = {} } 
     pipe: payload.pipe || null,
     cardsMapeados: cards.length,
   }
+}
+
+export function extractPipefyPeopleFromSnapshot(payload) {
+  const cards = getCards(payload)
+  const people = new Map()
+  const add = (value, source) => {
+    const text = String(value || '').trim()
+    const key = normalize(text)
+    if (!key || key.length < 2) return
+    if (!people.has(key)) {
+      people.set(key, {
+        value: text,
+        label: text,
+        source,
+        count: 0,
+      })
+    }
+    const item = people.get(key)
+    item.count += 1
+    if (!item.source.includes(source)) item.source = `${item.source}, ${source}`
+  }
+
+  for (const row of payload?.hunters || []) add(row.nome || row.name || row.pipefyName, 'Hunter')
+  for (const row of payload?.closers || []) add(row.nome || row.name || row.pipefyName, 'Closer')
+
+  for (const card of cards) {
+    getFieldValues(card, ['hunter', 'responsavel prospeccao', 'responsável prospecção', 'responsavel', 'responsável'])
+      .forEach(value => add(value, 'Responsável'))
+    getFieldValues(card, ['closer', 'email do closer', 'responsavel fechamento', 'responsável fechamento'])
+      .forEach(value => add(value, 'Closer'))
+    getCardAssignees(card).forEach(value => add(value, 'Assignee'))
+  }
+
+  return [...people.values()].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
 }

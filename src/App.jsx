@@ -13,6 +13,7 @@ const Pipeline = lazy(() => import('./pages/comercial/Pipeline'))
 const Calendario = lazy(() => import('./pages/comercial/Calendario'))
 const Ranking = lazy(() => import('./pages/comercial/Ranking'))
 const Contratos = lazy(() => import('./pages/comercial/Contratos'))
+const EquipeComercial = lazy(() => import('./pages/comercial/Equipe'))
 const GPDashboard = lazy(() => import('./pages/gp/Dashboard'))
 const GPMembros = lazy(() => import('./pages/gp/Membros'))
 const ProcessoSeletivo = lazy(() => import('./pages/gp/ProcessoSeletivo'))
@@ -62,6 +63,7 @@ function AppRoutes() {
       <Route path="/comercial/calendario" element={<ProtectedRoute><Calendario /></ProtectedRoute>} />
       <Route path="/comercial/ranking"   element={<ProtectedRoute><Ranking /></ProtectedRoute>} />
       <Route path="/comercial/contratos" element={<ProtectedRoute><Contratos /></ProtectedRoute>} />
+      <Route path="/comercial/equipe"    element={<ProtectedRoute><EquipeComercial /></ProtectedRoute>} />
 
       <Route path="/gp"               element={<ProtectedRoute><GPDashboard /></ProtectedRoute>} />
       <Route path="/gp/membros"       element={<ProtectedRoute><GPMembros /></ProtectedRoute>} />

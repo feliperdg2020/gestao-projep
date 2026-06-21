@@ -59,6 +59,11 @@ const EMPTY_PIPELINE = {
   ganhos: 0,
 }
 
+const EMPTY_COMMERCIAL_TEAM = {
+  hunters: [],
+  closers: [],
+}
+
 const isRecord = value => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 const asArray = (value, fallback = []) => Array.isArray(value) ? value : fallback
 const idsEqual = (a, b) => String(a ?? '') === String(b ?? '')
@@ -92,6 +97,13 @@ function normalizeCommercial(data) {
   return {
     ...INITIAL_COMERCIAL,
     ...current,
+    equipe: {
+      ...EMPTY_COMMERCIAL_TEAM,
+      ...(INITIAL_COMERCIAL.equipe || {}),
+      ...(current.equipe || {}),
+      hunters: asArray(current.equipe?.hunters, asArray(INITIAL_COMERCIAL.equipe?.hunters)),
+      closers: asArray(current.equipe?.closers, asArray(INITIAL_COMERCIAL.equipe?.closers)),
+    },
     hunters: asArray(current.hunters, INITIAL_COMERCIAL.hunters),
     closers: asArray(current.closers, INITIAL_COMERCIAL.closers),
     semanas: normalizePeriods(current.semanas, INITIAL_COMERCIAL.semanas),
@@ -193,8 +205,10 @@ function normalize(tabela, data) {
               ...permissoes.subareas,
               'comercial.dashboard': false,
               'comercial.pipeline': true,
+              'comercial.calendario': true,
               'comercial.ranking': false,
               'comercial.contratos': false,
+              'comercial.equipe': false,
             },
           }
         }
@@ -387,6 +401,10 @@ const db = {
       .map(closer => closer.id)
     db.set('comercial', {
       ...comercial,
+      equipe: {
+        hunters: (comercial.equipe?.hunters || []).filter(item => !idsEqual(item.userId, userId)),
+        closers: (comercial.equipe?.closers || []).filter(item => !idsEqual(item.userId, userId)),
+      },
       hunters: (comercial.hunters || []).filter(hunter => !idsEqual(hunter.userId, userId)),
       closers: (comercial.closers || []).filter(closer => !idsEqual(closer.userId, userId)),
       leads: (comercial.leads || []).map(lead => ({

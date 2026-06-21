@@ -3,6 +3,11 @@
 // TODO: [n8n] webhook em tempo real → aovivo via Pipefy → Supabase
 
 export const INITIAL_COMERCIAL = {
+  equipe: {
+    hunters: [],
+    closers: [],
+  },
+
   hunters: [
     { id: 'h1', nome: 'Ana Silva',      userId: 2 },
     { id: 'h2', nome: 'Fernanda Pires', userId: 6 },

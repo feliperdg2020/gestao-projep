@@ -29,6 +29,7 @@ export const ACCESS_MODULES = [
       { key: 'comercial.calendario', label: 'Calendário', path: '/comercial/calendario', icon: 'calendar' },
       { key: 'comercial.ranking', label: 'Ranking', path: '/comercial/ranking', icon: 'trophy' },
       { key: 'comercial.contratos', label: 'Contratos', path: '/comercial/contratos', icon: 'file-text' },
+      { key: 'comercial.equipe', label: 'Equipe', path: '/comercial/equipe', icon: 'users' },
     ],
   },
   {

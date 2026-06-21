@@ -23,8 +23,10 @@ export const ROLE_PRESETS = [
       subareas: {
         'comercial.dashboard': false,
         'comercial.pipeline': true,
+        'comercial.calendario': true,
         'comercial.ranking': false,
         'comercial.contratos': false,
+        'comercial.equipe': false,
       },
     },
   },

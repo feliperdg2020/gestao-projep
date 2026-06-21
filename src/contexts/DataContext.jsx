@@ -71,14 +71,31 @@ function createTemporaryCredentials(name = 'membro') {
 
 function resolveCommercialUsers(commercial, members) {
   const findMember = id => members.find(member => idsEqual(member.id, id))
-  const hunters = (commercial.hunters || []).map(hunter => ({
+  const mapTeamMember = (item, prefix) => {
+    const member = findMember(item.userId)
+    return {
+      id: item.id || `${prefix}-${item.userId}`,
+      ...item,
+      nome: member?.nome || item.nome || item.pipefyName,
+      userId: item.userId,
+      active: item.active !== false,
+    }
+  }
+  const configuredHunters = (commercial.equipe?.hunters || [])
+    .filter(item => item.active !== false)
+    .map(item => mapTeamMember(item, 'hunter'))
+  const configuredClosers = (commercial.equipe?.closers || [])
+    .filter(item => item.active !== false)
+    .map(item => mapTeamMember(item, 'closer'))
+
+  const hunters = (configuredHunters.length ? configuredHunters : (commercial.hunters || []).map(hunter => ({
     ...hunter,
     nome: findMember(hunter.userId)?.nome || hunter.nome,
-  }))
-  const closers = (commercial.closers || []).map(closer => ({
+  })))
+  const closers = (configuredClosers.length ? configuredClosers : (commercial.closers || []).map(closer => ({
     ...closer,
     nome: findMember(closer.userId)?.nome || closer.nome,
-  }))
+  })))
   const hunterMap = new Map(hunters.map(hunter => [hunter.id, hunter.nome]))
   const closerMap = new Map(closers.map(closer => [closer.id, closer.nome]))
   const resolvePeriod = period => ({
@@ -89,6 +106,10 @@ function resolveCommercialUsers(commercial, members) {
 
   return {
     ...commercial,
+    equipe: {
+      hunters: (commercial.equipe?.hunters || []).map(item => mapTeamMember(item, 'hunter')),
+      closers: (commercial.equipe?.closers || []).map(item => mapTeamMember(item, 'closer')),
+    },
     hunters,
     closers,
     semanas: (commercial.semanas || []).map(resolvePeriod),
@@ -394,6 +415,29 @@ export function DataProvider({ children }) {
     const nextList = typeof updater === 'function' ? updater(currentList) : updater
     return syncLiveCommercial({ ...current, [key]: nextList })
   })
+
+  const updateCommercialTeam = (role, entries) => {
+    if (!canUse('comercial.equipe')) return { success: false, error: 'Você não pode alterar a equipe comercial.' }
+    if (!['hunters', 'closers'].includes(role)) return { success: false, error: 'Função comercial inválida.' }
+    const normalizedEntries = (entries || []).map(entry => ({
+      id: entry.id || db.createId(),
+      userId: entry.userId,
+      pipefyName: entry.pipefyName?.trim() || '',
+      pipefyAliases: Array.isArray(entry.pipefyAliases)
+        ? entry.pipefyAliases.map(alias => `${alias}`.trim()).filter(Boolean)
+        : `${entry.pipefyAliases || ''}`.split(',').map(alias => alias.trim()).filter(Boolean),
+      active: entry.active !== false,
+    })).filter(entry => entry.userId && entry.pipefyName)
+
+    db.mutate('comercial', current => ({
+      ...current,
+      equipe: {
+        ...(current.equipe || {}),
+        [role]: normalizedEntries,
+      },
+    }))
+    return { success: true }
+  }
 
   const addLead = lead => {
     if (!canUse('comercial.pipeline')) return { success: false, error: 'Você não pode alterar o pipeline.' }
@@ -758,6 +802,7 @@ export function DataProvider({ children }) {
       updateMember,
       deleteMember,
       commercial: resolvedCommercial,
+      updateCommercialTeam,
       leads: resolvedCommercial.leads || [],
       addLead,
       updateLead,
