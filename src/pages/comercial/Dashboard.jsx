@@ -12,6 +12,8 @@ import { useData } from '../../contexts/DataContext'
 import { isSupabaseConfigured, supabase } from '../../lib/supabase'
 import { mapComercialSnapshot } from '../../services/comercialSnapshotMapper'
 
+const PIPEFY_COMERCIAL_PIPE_ID = '307210845'
+
 // ── Helpers ───────────────────────────────────────────────────
 const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) : 0)
 
@@ -388,6 +390,8 @@ const PIPELINE_STAGES = [
     tip: 'Leads com proposta enviada aguardando resposta' },
   { key: 'negociacao',      label: 'Negociação',  color: '#CE7028',
     tip: 'Leads em processo ativo de negociação' },
+  { key: 'agendamentosPendentes', label: 'Agend. Pend.', color: '#F97316',
+    tip: 'Leads aguardando novo agendamento, incluindo no-shows que precisam ser reagendados' },
   { key: 'ganhos',          label: 'Ganhos',      color: '#16A34A',
     tip: 'Leads convertidos em contrato fechado' },
 ]
@@ -395,7 +399,7 @@ const PIPELINE_STAGES = [
 function PipelineGrid({ pipeline }) {
   const total = Object.values(pipeline).reduce((s, v) => s + v, 0) || 1
   return (
-    <div className="grid grid-cols-4 lg:grid-cols-8 gap-2">
+    <div className="grid grid-cols-3 md:grid-cols-5 xl:grid-cols-9 gap-2">
       {PIPELINE_STAGES.map((s) => {
         const v       = pipeline[s.key] ?? 0
         const p       = pct(v, total)
@@ -424,6 +428,42 @@ function PipelineGrid({ pipeline }) {
   )
 }
 
+const CONVERSION_RATES = [
+  { label: 'Leads -> Ligações', numerator: 'ligoesRealizadas', denominator: 'leadsCadastrados', tip: 'Ligações ÷ Leads Cadastrados × 100' },
+  { label: 'Ligações -> Diagnóstica Ag.', numerator: 'diagnosticasAgendadas', denominator: 'ligoesRealizadas', tip: 'Diagnósticas Agendadas ÷ Ligações × 100' },
+  { label: 'Diagnóstica Ag. -> Real.', numerator: 'diagnosticasRealizadas', denominator: 'diagnosticasAgendadas', tip: 'Diagnósticas Realizadas ÷ Diagnósticas Agendadas × 100' },
+  { label: 'Diagnóstica Real. -> Proposta Ag.', numerator: 'propostasAgendadas', denominator: 'diagnosticasRealizadas', tip: 'Propostas Agendadas ÷ Diagnósticas Realizadas × 100' },
+  { label: 'Proposta Ag. -> Real.', numerator: 'propostasRealizadas', denominator: 'propostasAgendadas', tip: 'Propostas Realizadas ÷ Propostas Agendadas × 100' },
+  { label: 'Proposta Real. -> Negociação', numerator: 'negociacoes', denominator: 'propostasRealizadas', tip: 'Negociações ÷ Propostas Realizadas × 100' },
+  { label: 'Negociação -> Contrato', numerator: 'contratosFechados', denominator: 'negociacoes', tip: 'Contratos Fechados ÷ Negociações × 100' },
+  { label: 'Lead -> Contrato', numerator: 'contratosFechados', denominator: 'leadsCadastrados', tip: 'Contratos Fechados ÷ Leads Cadastrados × 100' },
+]
+
+function ConversionRatesGrid({ funil }) {
+  return (
+    <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-2">
+      {CONVERSION_RATES.map(rate => {
+        const value = pct(funil[rate.numerator] || 0, funil[rate.denominator] || 0)
+        const tone = value >= 70 ? 'text-green-400' : value >= 35 ? 'text-yellow-400' : 'text-red-400'
+        return (
+          <div key={rate.label} className="bg-[#0D0D0D] border border-[#1E1E1E] rounded-md p-3">
+            <p className="text-[10px] text-gray-600 font-semibold uppercase tracking-wider flex items-center">
+              {rate.label}
+              <InfoTooltip text={rate.tip} />
+            </p>
+            <div className="flex items-end justify-between gap-3 mt-2">
+              <span className={`text-xl font-bold ${tone}`}>{value}%</span>
+              <span className="text-[10px] text-gray-700">
+                {funil[rate.numerator] || 0}/{funil[rate.denominator] || 0}
+              </span>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ── Hunters com tooltips nas colunas ─────────────────────────
 const HUNTER_COLS = [
   { label: 'Hunter',         tip: null },
@@ -431,6 +471,7 @@ const HUNTER_COLS = [
   { label: 'Reuniões Marc.', tip: 'Total de reuniões agendadas pelo Hunter no período' },
   { label: 'Reuniões Real.', tip: 'Reuniões que de fato aconteceram (não foram no-show)' },
   { label: 'No-shows',       tip: 'Reuniões agendadas em que o lead não compareceu' },
+  { label: 'Taxa No-show',   tip: 'No-shows ÷ Reuniões Marcadas × 100' },
   { label: 'Taxa Conv.',     tip: 'Reuniões Realizadas ÷ Pessoas Contatadas × 100' },
 ]
 const MEDIA_TIP_H = 'Média aritmética de todos os Hunters para este indicador no período'
@@ -475,13 +516,14 @@ function HuntersSection({ hunters, prevHunters, prevLabel }) {
           <tbody>
             {hunters.length === 0 && (
               <tr>
-                <td colSpan={6} className="py-6 text-center text-gray-600">
+                <td colSpan={7} className="py-6 text-center text-gray-600">
                   Nenhum hunter configurado. Cadastre vínculos em Comercial &gt; Equipe.
                 </td>
               </tr>
             )}
             {hunters.map((h) => {
               const taxa = pct(h.reunioesRealizadas, h.contatadas)
+              const taxaNoShow = pct(h.noShows, h.reunioesMarcadas)
               return (
                 <tr key={h.id} className="border-b border-[#0D0D0D] hover:bg-[#0D0D0D]/60 transition-colors">
                   <td className="py-2.5 pr-4 font-semibold text-white whitespace-nowrap">{h.nome}</td>
@@ -490,6 +532,11 @@ function HuntersSection({ hunters, prevHunters, prevLabel }) {
                   <td className="py-2.5 pr-4 text-gray-300">{h.reunioesRealizadas}</td>
                   <td className="py-2.5 pr-4">
                     <span className={h.noShows > 0 ? 'text-red-400' : 'text-gray-500'}>{h.noShows}</span>
+                  </td>
+                  <td className="py-2.5 pr-4">
+                    <span className={`font-bold ${taxaNoShow > 20 ? 'text-red-400' : taxaNoShow > 0 ? 'text-yellow-400' : 'text-gray-500'}`}>
+                      {taxaNoShow}%
+                    </span>
                   </td>
                   <td className="py-2.5 pr-4">
                     <span className={`font-bold ${taxa >= 30 ? 'text-green-400' : taxa >= 20 ? 'text-yellow-400' : 'text-red-400'}`}>
@@ -509,6 +556,9 @@ function HuntersSection({ hunters, prevHunters, prevLabel }) {
               {['contatadas', 'reunioesMarcadas', 'reunioesRealizadas', 'noShows'].map((k) => (
                 <td key={k} className="py-2.5 pr-4 text-gray-500 font-semibold">{avg(hunters, k).toFixed(1)}</td>
               ))}
+              <td className="py-2.5 pr-4 text-gray-500 font-bold">
+                {pct(sumKey(hunters, 'noShows'), sumKey(hunters, 'reunioesMarcadas'))}%
+              </td>
               <td className="py-2.5 pr-4 text-gray-500 font-bold">
                 {pct(sumKey(hunters, 'reunioesRealizadas'), sumKey(hunters, 'contatadas'))}%
               </td>
@@ -769,8 +819,7 @@ export default function ComercialDashboard() {
         .select('id, payload, synced_at')
         .eq('source', 'pipefy')
         .order('synced_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
+        .limit(20)
 
       if (cancelled) return
 
@@ -780,13 +829,18 @@ export default function ComercialDashboard() {
         return
       }
 
-      setRemoteSnapshot(data || null)
+      const snapshots = Array.isArray(data) ? data : []
+      const selectedSnapshot = snapshots.find(row =>
+        String(row.payload?.pipe?.id || row.payload?.raw?.pipe?.id || row.payload?.raw?.data?.pipe?.id || '') === PIPEFY_COMERCIAL_PIPE_ID
+      ) || snapshots[0] || null
+
+      setRemoteSnapshot(selectedSnapshot)
       setRemoteStatus({
         loading: false,
-        error: data ? '' : 'Nenhum snapshot encontrado. Usando dados locais.',
+        error: selectedSnapshot ? '' : 'Nenhum snapshot encontrado. Usando dados locais.',
       })
-      if (data) {
-        const referenceDate = data.synced_at || data.payload?.periodo?.atualizadoEm || new Date().toISOString()
+      if (selectedSnapshot) {
+        const referenceDate = selectedSnapshot.synced_at || selectedSnapshot.payload?.periodo?.atualizadoEm || new Date().toISOString()
         setSemaIdx(findCurrentWeekIndex(buildWeekRanges(referenceDate, 10)))
         setMesIdx(findCurrentMonthIndex(buildMonthRanges(referenceDate, 8)))
         setViewMode('aovivo')
@@ -913,6 +967,13 @@ export default function ComercialDashboard() {
         <h2 className="text-sm font-bold text-white uppercase tracking-wider">Funil de Vendas</h2>
         {/* TODO: [Supabase] supabase.from('funil_comercial').select('*').eq('periodo_id', periodoId) */}
         <FunnelFlow funil={currentPeriod.funil} />
+
+        <div className="border-t border-[#1E1E1E] pt-5">
+          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
+            Taxas de Conversão
+          </p>
+          <ConversionRatesGrid funil={currentPeriod.funil} />
+        </div>
 
         {showPipeline && currentPeriod.pipeline && (
           <div className="border-t border-[#1E1E1E] pt-5">

@@ -4,10 +4,12 @@ const EMPTY_FUNIL = {
   ligacoesRealizadas: 0,
   diagnosticasAgendadas: 0,
   diagnosticasRealizadas: 0,
+  noShowsDiagnostica: 0,
   reunioesMarcadas: 0,
   reunioesRealizadas: 0,
   propostasAgendadas: 0,
   propostasRealizadas: 0,
+  noShowsProposta: 0,
   propostas: 0,
   negociacoes: 0,
   contratosFechados: 0,
@@ -28,6 +30,7 @@ const EMPTY_PIPELINE = {
   diagnostico: 0,
   proposta: 0,
   negociacao: 0,
+  agendamentosPendentes: 0,
   ganhos: 0,
 }
 
@@ -271,7 +274,7 @@ function getStageName(card) {
 
 function getCardValue(card) {
   return toNumber(
-    getFieldValue(card, ['valor fechado', 'valor da proposta', 'valor', 'ticket', 'orcamento', 'orçamento', 'receita']) ||
+    getFieldValue(card, ['valor do projeto', 'valor fechado', 'valor da proposta', 'valor', 'ticket', 'orcamento', 'orçamento', 'receita']) ||
     card?.value ||
     card?.amount,
   )
@@ -303,6 +306,7 @@ function classifyPipeline(card) {
   if (includesAny(stage, ['negociacao', 'negociação'])) return 'negociacao'
   if (includesAny(stage, ['proposta'])) return 'proposta'
   if (includesAny(stage, ['diagnostico', 'diagnóstico', 'diagnostica', 'diagnóstica', 'reuniao', 'reunião'])) return 'diagnostico'
+  if (includesAny(stage, ['agendamentos pendentes', 'agendamento pendente'])) return 'agendamentosPendentes'
   if (includesAny(stage, ['interesse futuro', 'futuro', 'retornar depois'])) return 'interesseFuturo'
   if (includesAny(stage, ['perdido', 'perda'])) return 'perdidos'
   if (includesAny(stage, ['nao contatado', 'não contatado', 'sem contato', 'ligacoes', 'ligações', 'contato'])) return 'naoContatados'
@@ -323,6 +327,7 @@ const EVENT_LABELS = {
     'terceira tentativa de contato',
   ],
   diagnosticScheduled: [
+    'para que data e hora ficou agendado',
     'data e hora da diagnostica agendada',
     'data e hora da diagnóstica agendada',
     'data e hora da diagnostica',
@@ -347,6 +352,7 @@ const EVENT_LABELS = {
   ],
   negotiation: ['data de entrada em negociacao', 'data de entrada em negociação'],
   contract: ['data de fechamento do contrato', 'data da assinatura do contrato', 'data do fechamento'],
+  noShow: ['data do no-show', 'data do no show'],
 }
 
 const STAGE_KEYWORDS = {
@@ -359,6 +365,16 @@ const STAGE_KEYWORDS = {
   negotiation: ['negociacao', 'negociação'],
   contract: ['contratos fechados', 'ganhos', 'ganho', 'fechado', 'contrato assinado'],
   lost: ['perdido', 'perdidos', 'perda'],
+  pendingScheduling: ['agendamentos pendentes', 'agendamento pendente'],
+}
+
+const PIPEFY_2026_STAGE_GROUPS = {
+  cadastro: ['leads cadastrados', 'cadastro'],
+  contactedOrLater: ['nao contatado', 'não contatado', 'interesse futuro', 'diagnostica agendada', 'diagnóstica agendada', 'diagnostica realizada', 'diagnóstica realizada', 'proposta agendada', 'proposta realizada', 'negociacao', 'negociação', 'agendamentos pendentes', 'contratos fechados', 'perdidos'],
+  diagnosticScheduledOrLater: ['diagnostica agendada', 'diagnóstica agendada', 'diagnostica realizada', 'diagnóstica realizada', 'proposta agendada', 'proposta realizada', 'negociacao', 'negociação', 'agendamentos pendentes', 'contratos fechados'],
+  diagnosticDoneOrLater: ['diagnostica realizada', 'diagnóstica realizada', 'proposta agendada', 'proposta realizada', 'negociacao', 'negociação', 'contratos fechados'],
+  proposalScheduledOrLater: ['proposta agendada', 'proposta realizada', 'negociacao', 'negociação', 'agendamentos pendentes', 'contratos fechados'],
+  proposalDoneOrLater: ['proposta realizada', 'negociacao', 'negociação', 'contratos fechados'],
 }
 
 function hasFieldValue(card, keywords) {
@@ -382,16 +398,47 @@ function stageEventInPeriod(card, keywords, range) {
   return currentOrHistoricalStage(card, keywords, range)
 }
 
-function eventInPeriod(card, labels, stageKeywords, range) {
-  return fieldEventInPeriod(card, labels, range) || stageEventInPeriod(card, stageKeywords, range)
-}
-
 function eventStatusInPeriod(card, status, labels, stageKeywords, range, predicate) {
   if (!predicate(status)) return false
   if (range?.inicio && range?.fim) {
     return fieldEventInPeriod(card, labels, range) || stageEventInPeriod(card, stageKeywords, range)
   }
   return true
+}
+
+function currentStageMatches(card, keywords) {
+  return includesAny(getStageName(card), keywords)
+}
+
+function hasReachedStage(card, stageKeywords, fieldLabels = []) {
+  if (currentStageMatches(card, stageKeywords)) return true
+  if (fieldLabels.length && !currentStageMatches(card, PIPEFY_2026_STAGE_GROUPS.cadastro)) {
+    return hasFieldValue(card, fieldLabels)
+  }
+  return false
+}
+
+function eventReachedInPeriod(card, fieldLabels, stageKeywords, range) {
+  if (!range?.inicio || !range?.fim) return hasReachedStage(card, stageKeywords, fieldLabels)
+  if (enteredStageInRange(card, stageKeywords, range)) return true
+  if (!hasReachedStage(card, stageKeywords, fieldLabels)) return false
+  return hasFieldDateInRange(card, fieldLabels, range)
+}
+
+function isNoShowFor(card, type, range) {
+  const stageValue = getFieldValue(card, ['etapa que aconteceu no-show', 'etapa que aconteceu no show'])
+  const flagValue = getFieldValue(card, ['foi no-show', 'foi no show'])
+  const hasNoShowFlag = includesAny(flagValue, ['sim', 'true', 'yes', 'no-show', 'no show', 'noshow'])
+  const hasNoShowDate = hasFieldValue(card, EVENT_LABELS.noShow)
+  const isPending = currentStageMatches(card, STAGE_KEYWORDS.pendingScheduling)
+  const typeWords = type === 'diagnostica'
+    ? ['diagnostica', 'diagnóstica', 'diagnostico', 'diagnóstico']
+    : ['proposta']
+  const typeMatches = includesAny(stageValue, typeWords) || (isPending && !stageValue)
+  if ((!hasNoShowFlag && !hasNoShowDate) || !typeMatches) return false
+  if (!range?.inicio || !range?.fim) return true
+  return hasFieldDateInRange(card, EVENT_LABELS.noShow, range) ||
+    enteredStageInRange(card, STAGE_KEYWORDS.pendingScheduling, range)
 }
 
 function contractWasClosed(card) {
@@ -512,8 +559,8 @@ function matchTeamValue(value, index) {
 
 function getResponsibleTeamMember(card, type, teamIndex) {
   const fieldKeywords = type === 'hunter'
-    ? ['hunter', 'prospector', 'responsavel prospeccao', 'responsável prospecção', 'responsavel', 'responsável']
-    : ['closer', 'fechador', 'email do closer', 'responsavel fechamento', 'responsável fechamento']
+    ? ['hunter', 'prospector', 'responsaveis pela diagnostica', 'responsáveis pela diagnóstica', 'responsavel prospeccao', 'responsável prospecção', 'responsavel', 'responsável']
+    : ['closer responsavel', 'closer responsável', 'responsaveis pela apresentacao de proposta', 'responsáveis pela apresentação de proposta', 'responsavel pela negociacao', 'responsável pela negociação', 'responsaveis pelo fechamento', 'responsáveis pelo fechamento', 'closer', 'fechador', 'email do closer', 'responsavel fechamento', 'responsável fechamento']
 
   const values = [
     ...getFieldValues(card, fieldKeywords),
@@ -572,24 +619,18 @@ function buildMetricsFromCards(cards, members, commercial, payload, range = null
 
   for (const card of cards) {
     const pipelineKey = classifyPipeline(card)
-    pipeline[pipelineKey] += 1
+    const includeInPipeline = !range?.inicio || !range?.fim || filterCardsByRange([card], range).length > 0
+    if (includeInPipeline) pipeline[pipelineKey] += 1
 
     const leadCreated = cardCreatedInPeriod(card, range)
     const contacted = range?.inicio && range?.fim
-      ? eventInPeriod(card, EVENT_LABELS.contact, STAGE_KEYWORDS.contact, range)
-      : pipelineKey !== 'cadastro' || hasFieldValue(card, EVENT_LABELS.contact)
+      ? eventReachedInPeriod(card, EVENT_LABELS.contact, PIPEFY_2026_STAGE_GROUPS.contactedOrLater, range)
+      : currentStageMatches(card, PIPEFY_2026_STAGE_GROUPS.contactedOrLater)
 
-    const diagnosticScheduled = eventInPeriod(
+    const diagnosticScheduled = eventReachedInPeriod(
       card,
       EVENT_LABELS.diagnosticScheduled,
-      [
-        ...STAGE_KEYWORDS.diagnosticScheduled,
-        ...STAGE_KEYWORDS.diagnosticDone,
-        ...STAGE_KEYWORDS.proposalScheduled,
-        ...STAGE_KEYWORDS.proposalDone,
-        ...STAGE_KEYWORDS.negotiation,
-        ...STAGE_KEYWORDS.contract,
-      ],
+      PIPEFY_2026_STAGE_GROUPS.diagnosticScheduledOrLater,
       range,
     )
 
@@ -598,29 +639,17 @@ function buildMetricsFromCards(cards, members, commercial, payload, range = null
       card,
       diagnosticStatus,
       EVENT_LABELS.diagnosticDone,
-      [
-        ...STAGE_KEYWORDS.diagnosticDone,
-        ...STAGE_KEYWORDS.proposalScheduled,
-        ...STAGE_KEYWORDS.proposalDone,
-        ...STAGE_KEYWORDS.negotiation,
-        ...STAGE_KEYWORDS.contract,
-      ],
+      PIPEFY_2026_STAGE_GROUPS.diagnosticDoneOrLater,
       range,
       statusIsRealized,
-    ) || eventInPeriod(
+    ) || eventReachedInPeriod(
       card,
       EVENT_LABELS.diagnosticDone,
-      [
-        ...STAGE_KEYWORDS.diagnosticDone,
-        ...STAGE_KEYWORDS.proposalScheduled,
-        ...STAGE_KEYWORDS.proposalDone,
-        ...STAGE_KEYWORDS.negotiation,
-        ...STAGE_KEYWORDS.contract,
-      ],
+      PIPEFY_2026_STAGE_GROUPS.diagnosticDoneOrLater,
       range,
     )
 
-    const diagnosticNoShow = eventStatusInPeriod(
+    const diagnosticNoShow = isNoShowFor(card, 'diagnostica', range) || eventStatusInPeriod(
       card,
       diagnosticStatus,
       EVENT_LABELS.diagnosticScheduled,
@@ -629,15 +658,10 @@ function buildMetricsFromCards(cards, members, commercial, payload, range = null
       statusIsNoShow,
     )
 
-    const proposalScheduled = eventInPeriod(
+    const proposalScheduled = eventReachedInPeriod(
       card,
       EVENT_LABELS.proposalScheduled,
-      [
-        ...STAGE_KEYWORDS.proposalScheduled,
-        ...STAGE_KEYWORDS.proposalDone,
-        ...STAGE_KEYWORDS.negotiation,
-        ...STAGE_KEYWORDS.contract,
-      ],
+      PIPEFY_2026_STAGE_GROUPS.proposalScheduledOrLater,
       range,
     )
 
@@ -646,25 +670,17 @@ function buildMetricsFromCards(cards, members, commercial, payload, range = null
       card,
       proposalStatus,
       EVENT_LABELS.proposalDone,
-      [
-        ...STAGE_KEYWORDS.proposalDone,
-        ...STAGE_KEYWORDS.negotiation,
-        ...STAGE_KEYWORDS.contract,
-      ],
+      PIPEFY_2026_STAGE_GROUPS.proposalDoneOrLater,
       range,
       statusIsRealized,
-    ) || eventInPeriod(
+    ) || eventReachedInPeriod(
       card,
       EVENT_LABELS.proposalDone,
-      [
-        ...STAGE_KEYWORDS.proposalDone,
-        ...STAGE_KEYWORDS.negotiation,
-        ...STAGE_KEYWORDS.contract,
-      ],
+      PIPEFY_2026_STAGE_GROUPS.proposalDoneOrLater,
       range,
     )
 
-    const proposalNoShow = eventStatusInPeriod(
+    const proposalNoShow = isNoShowFor(card, 'proposta', range) || eventStatusInPeriod(
       card,
       proposalStatus,
       EVENT_LABELS.proposalScheduled,
@@ -673,14 +689,14 @@ function buildMetricsFromCards(cards, members, commercial, payload, range = null
       statusIsNoShow,
     )
 
-    const inNegotiation = eventInPeriod(
+    const inNegotiation = eventReachedInPeriod(
       card,
       EVENT_LABELS.negotiation,
       [...STAGE_KEYWORDS.negotiation, ...STAGE_KEYWORDS.contract],
       range,
     )
 
-    const contractClosed = contractWasClosed(card) && eventInPeriod(
+    const contractClosed = contractWasClosed(card) && eventReachedInPeriod(
       card,
       EVENT_LABELS.contract,
       STAGE_KEYWORDS.contract,
@@ -700,11 +716,13 @@ function buildMetricsFromCards(cards, members, commercial, payload, range = null
       funil.diagnosticasRealizadas += 1
       funil.reunioesRealizadas += 1
     }
+    if (diagnosticNoShow) funil.noShowsDiagnostica += 1
     if (proposalScheduled) {
       funil.propostasAgendadas += 1
       funil.propostas += 1
     }
     if (proposalDone) funil.propostasRealizadas += 1
+    if (proposalNoShow) funil.noShowsProposta += 1
     if (inNegotiation) funil.negociacoes += 1
     if (contractClosed) {
       funil.contratosFechados += 1
@@ -837,9 +855,9 @@ export function extractPipefyPeopleFromSnapshot(payload) {
   }
 
   for (const card of cards) {
-    getFieldValues(card, ['hunter', 'responsavel prospeccao', 'responsável prospecção', 'responsavel', 'responsável'])
+    getFieldValues(card, ['hunter', 'responsaveis pela diagnostica', 'responsáveis pela diagnóstica', 'responsavel prospeccao', 'responsável prospecção', 'responsavel', 'responsável'])
       .forEach(value => extractEmails(value).forEach(email => add({ email, source: 'Responsável' })))
-    getFieldValues(card, ['closer', 'email do closer', 'responsavel fechamento', 'responsável fechamento'])
+    getFieldValues(card, ['closer responsavel', 'closer responsável', 'responsaveis pela apresentacao de proposta', 'responsáveis pela apresentação de proposta', 'responsavel pela negociacao', 'responsável pela negociação', 'responsaveis pelo fechamento', 'responsáveis pelo fechamento', 'closer', 'email do closer', 'responsavel fechamento', 'responsável fechamento'])
       .forEach(value => extractEmails(value).forEach(email => add({ email, source: 'Closer' })))
     getCardAssigneePeople(card).forEach(person => {
       if (person.email) add({ email: person.email, name: person.name, source: 'Assignee' })
