@@ -814,12 +814,25 @@ export default function ComercialDashboard() {
       }
 
       setRemoteStatus({ loading: true, error: '' })
-      const { data, error } = await supabase
-        .from('comercial_dashboard_snapshots')
-        .select('id, payload, synced_at')
-        .eq('source', 'pipefy')
-        .order('synced_at', { ascending: false })
-        .limit(20)
+
+      let data, error
+      try {
+        const result = await Promise.race([
+          supabase
+            .from('comercial_dashboard_snapshots')
+            .select('id, payload, synced_at')
+            .eq('source', 'pipefy')
+            .order('synced_at', { ascending: false })
+            .limit(20),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000)),
+        ])
+        data = result.data
+        error = result.error
+      } catch {
+        if (cancelled) return
+        setRemoteStatus({ loading: false, error: 'Tempo esgotado. Usando dados locais.' })
+        return
+      }
 
       if (cancelled) return
 

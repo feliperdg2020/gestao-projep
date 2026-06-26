@@ -137,7 +137,8 @@ export function AuthProvider({ children }) {
   const login = async (email, password) => {
     let currentUsers = db.get('usuarios')
     try {
-      currentUsers = await pullUsersFromSupabase(db)
+      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
+      currentUsers = await Promise.race([pullUsersFromSupabase(db), timeout])
     } catch (error) {
       console.warn('[Supabase] Nao foi possivel sincronizar usuarios antes do login:', error.message || error)
     }
