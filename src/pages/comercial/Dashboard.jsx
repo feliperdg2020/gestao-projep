@@ -13,6 +13,27 @@ import { isSupabaseConfigured, supabase } from '../../lib/supabase'
 import { mapComercialSnapshot } from '../../services/comercialSnapshotMapper'
 
 const PIPEFY_COMERCIAL_PIPE_ID = '307210845'
+const DASHBOARD_SNAPSHOT_CACHE_KEY = 'projep_comercial_dashboard_snapshot_cache_v1'
+const DASHBOARD_REFRESH_MS = 5 * 60 * 1000
+
+function readCachedSnapshot() {
+  if (typeof window === 'undefined') return null
+  try {
+    const cached = window.localStorage.getItem(DASHBOARD_SNAPSHOT_CACHE_KEY)
+    return cached ? JSON.parse(cached) : null
+  } catch {
+    return null
+  }
+}
+
+function cacheSnapshot(snapshot) {
+  if (typeof window === 'undefined' || !snapshot) return
+  try {
+    window.localStorage.setItem(DASHBOARD_SNAPSHOT_CACHE_KEY, JSON.stringify(snapshot))
+  } catch {
+    // Cache local é apenas uma camada de tolerância para quedas momentâneas.
+  }
+}
 
 // ── Helpers ───────────────────────────────────────────────────
 const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) : 0)
@@ -791,8 +812,11 @@ function buildRemoteDashboardData(snapshot, members, commercial) {
 
 export default function ComercialDashboard() {
   const { commercial, members } = useData()
-  const [remoteSnapshot, setRemoteSnapshot] = useState(null)
-  const [remoteStatus, setRemoteStatus] = useState({ loading: true, error: '' })
+  const [remoteSnapshot, setRemoteSnapshot] = useState(() => readCachedSnapshot())
+  const [remoteStatus, setRemoteStatus] = useState(() => ({
+    loading: !readCachedSnapshot(),
+    error: '',
+  }))
   const remoteDashboardData = useMemo(
     () => buildRemoteDashboardData(remoteSnapshot, members, commercial),
     [commercial, members, remoteSnapshot],
@@ -806,14 +830,19 @@ export default function ComercialDashboard() {
 
   useEffect(() => {
     let cancelled = false
+    let fetching = false
 
-    async function fetchLatestSnapshot() {
+    async function fetchLatestSnapshot({ silent = false } = {}) {
+      if (fetching) return
+      fetching = true
+
       if (!isSupabaseConfigured || !supabase) {
         setRemoteStatus({ loading: false, error: 'Supabase não configurado. Usando dados locais.' })
+        fetching = false
         return
       }
 
-      setRemoteStatus({ loading: true, error: '' })
+      if (!silent && !remoteSnapshot) setRemoteStatus({ loading: true, error: '' })
 
       let data, error
       try {
@@ -823,31 +852,49 @@ export default function ComercialDashboard() {
             .select('id, payload, synced_at')
             .eq('source', 'pipefy')
             .order('synced_at', { ascending: false })
-            .limit(20),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000)),
+            .limit(6),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 6000)),
         ])
         data = result.data
         error = result.error
       } catch {
         if (cancelled) return
-        setRemoteStatus({ loading: false, error: 'Tempo esgotado. Usando dados locais.' })
+        setRemoteStatus({
+          loading: false,
+          error: remoteSnapshot ? '' : 'Tempo esgotado. Usando dados locais.',
+        })
+        fetching = false
         return
       }
 
       if (cancelled) return
 
       if (error) {
-        setRemoteStatus({ loading: false, error: 'Não foi possível carregar dados do Pipefy. Usando fallback local.' })
+        setRemoteStatus({
+          loading: false,
+          error: remoteSnapshot ? '' : 'Não foi possível carregar dados do Pipefy. Usando fallback local.',
+        })
         console.warn('[ComercialDashboard] Falha ao carregar snapshot comercial:', error.message || error)
+        fetching = false
         return
       }
 
       const snapshots = Array.isArray(data) ? data : []
-      const selectedSnapshot = snapshots.find(row =>
-        String(row.payload?.pipe?.id || row.payload?.raw?.pipe?.id || row.payload?.raw?.data?.pipe?.id || '') === PIPEFY_COMERCIAL_PIPE_ID
-      ) || snapshots[0] || null
+      const selectedSnapshot = snapshots.find(row => {
+        const payload = row.payload || {}
+        const pipeIds = [
+          payload.pipe?.id,
+          payload.raw?.pipe?.id,
+          payload.raw?.data?.pipe?.id,
+          ...(payload.pipes || []).map(pipe => pipe.id),
+          ...(payload.raw?.pipes || []).map(pipe => pipe.id),
+        ].filter(Boolean).map(String)
+
+        return pipeIds.includes(PIPEFY_COMERCIAL_PIPE_ID) || payload.funil || payload.raw
+      }) || snapshots[0] || null
 
       setRemoteSnapshot(selectedSnapshot)
+      cacheSnapshot(selectedSnapshot)
       setRemoteStatus({
         loading: false,
         error: selectedSnapshot ? '' : 'Nenhum snapshot encontrado. Usando dados locais.',
@@ -858,15 +905,19 @@ export default function ComercialDashboard() {
         setMesIdx(findCurrentMonthIndex(buildMonthRanges(referenceDate, 8)))
         setViewMode('aovivo')
       }
+      fetching = false
     }
 
     fetchLatestSnapshot()
-    const intervalId = window.setInterval(fetchLatestSnapshot, 60000)
+    const intervalId = window.setInterval(() => fetchLatestSnapshot({ silent: true }), DASHBOARD_REFRESH_MS)
+    const onFocus = () => fetchLatestSnapshot({ silent: true })
+    window.addEventListener('focus', onFocus)
     return () => {
       cancelled = true
       window.clearInterval(intervalId)
+      window.removeEventListener('focus', onFocus)
     }
-  }, [])
+  }, [remoteSnapshot])
 
   // TODO: [Supabase] substituir por: supabase.from('comercial_semanas').select('*').order('inicio')
   const currentPeriod = useMemo(() => {
