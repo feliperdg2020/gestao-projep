@@ -13,7 +13,7 @@ import { isSupabaseConfigured, supabase } from '../../lib/supabase'
 import { mapComercialSnapshot } from '../../services/comercialSnapshotMapper'
 
 const PIPEFY_COMERCIAL_PIPE_ID = '307210845'
-const DASHBOARD_SNAPSHOT_CACHE_KEY = 'projep_comercial_dashboard_snapshot_cache_v1'
+const DASHBOARD_SNAPSHOT_CACHE_KEY = 'projep_comercial_dashboard_snapshot_cache_pipe_307210845_v1'
 const DASHBOARD_REFRESH_MS = 5 * 60 * 1000
 
 function readCachedSnapshot() {
@@ -890,8 +890,8 @@ export default function ComercialDashboard() {
           ...(payload.raw?.pipes || []).map(pipe => pipe.id),
         ].filter(Boolean).map(String)
 
-        return pipeIds.includes(PIPEFY_COMERCIAL_PIPE_ID) || payload.funil || payload.raw
-      }) || snapshots[0] || null
+        return pipeIds.includes(PIPEFY_COMERCIAL_PIPE_ID)
+      }) || null
 
       setRemoteSnapshot(selectedSnapshot)
       cacheSnapshot(selectedSnapshot)

@@ -142,9 +142,18 @@ export default function EquipeComercial() {
         .limit(20)
       if (!cancelled && !error) {
         const snapshots = Array.isArray(data) ? data : []
-        setSnapshot(snapshots.find(row =>
-          String(row.payload?.pipe?.id || row.payload?.raw?.pipe?.id || row.payload?.raw?.data?.pipe?.id || '') === PIPEFY_COMERCIAL_PIPE_ID
-        ) || snapshots[0] || null)
+        setSnapshot(snapshots.find(row => {
+          const payload = row.payload || {}
+          const pipeIds = [
+            payload.pipe?.id,
+            payload.raw?.pipe?.id,
+            payload.raw?.data?.pipe?.id,
+            ...(payload.pipes || []).map(pipe => pipe.id),
+            ...(payload.raw?.pipes || []).map(pipe => pipe.id),
+          ].filter(Boolean).map(String)
+
+          return pipeIds.includes(PIPEFY_COMERCIAL_PIPE_ID)
+        }) || null)
       }
     }
     loadSnapshot()
