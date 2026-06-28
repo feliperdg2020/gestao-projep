@@ -465,6 +465,12 @@ function contactAttemptInPeriod(card, range) {
     hasReachedStage(card, STAGE_KEYWORDS.contact, EVENT_LABELS.contact)
 }
 
+function contactStageInPeriod(card, range) {
+  if (!currentStageMatches(card, STAGE_KEYWORDS.contact)) return false
+  if (range?.inicio && range?.fim) return hasFieldDateInRange(card, EVENT_LABELS.contact, range)
+  return true
+}
+
 function stageEventInPeriod(card, keywords, range) {
   return currentOrHistoricalStage(card, keywords, range)
 }
@@ -694,6 +700,7 @@ function buildMetricsFromCards(cards, members, commercial, payload, range = null
 
     const leadCreated = cardCreatedInPeriod(card, range)
     const contactAttempted = contactAttemptInPeriod(card, range)
+    const contactStage = contactStageInPeriod(card, range)
 
     const diagnosticScheduled = eventReachedInPeriod(
       card,
@@ -792,7 +799,7 @@ function buildMetricsFromCards(cards, members, commercial, payload, range = null
 
     if (leadCreated) funil.leadsCadastrados += 1
     if (worked) funil.leadsTrabalhados += 1
-    if (contactAttempted) funil.tentativasContato += 1
+    if (contactStage) funil.tentativasContato += 1
     if (contactAttempted) {
       funil.ligoesRealizadas += 1
       funil.ligacoesRealizadas += 1

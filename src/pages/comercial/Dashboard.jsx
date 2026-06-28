@@ -372,50 +372,31 @@ const FUNIL_STAGES = [
 ]
 
 function FunnelFlow({ funil }) {
-  const total = funil.leadsCadastrados || 1
+  const total = funil.leadsCadastrados || 0
   return (
     <div className="overflow-x-auto pb-2">
-      <div className="flex items-stretch gap-0 min-w-max">
-        {FUNIL_STAGES.map((stage, i) => {
-          const val     = funil[stage.key] ?? 0
-          const denominatorKey = stage.denominatorKey || FUNIL_STAGES[i - 1]?.key
-          const prevVal = i > 0 ? (funil[denominatorKey] ?? 0) : 0
-          const conv    = i > 0 ? pct(val, prevVal) : null
-          const barW    = Math.max(10, pct(val, total))
-
-          const convCls =
-            conv === null ? '' :
-            conv >= 70    ? 'text-green-400 bg-green-950/50 border-green-900/40' :
-            conv >= 45    ? 'text-yellow-400 bg-yellow-950/40 border-yellow-900/30' :
-                            'text-red-400 bg-red-950/40 border-red-900/30'
+      <div className="flex items-stretch gap-3 min-w-max">
+        {FUNIL_STAGES.map((stage) => {
+          const val = funil[stage.key] ?? 0
+          const representatividade = pct(val, total)
+          const barW = total > 0 && val > 0 ? Math.max(10, representatividade) : 0
 
           return (
-            <div key={stage.key} className="flex items-center">
-              {/* Badge de conversão entre estágios */}
-              {i > 0 && (
-                <div className="flex flex-col items-center mx-1 w-14 flex-shrink-0">
-                  <span className={`inline-flex items-center text-[10px] font-bold border px-1.5 py-0.5 rounded ${convCls}`}>
-                    {conv}%
-                    {stage.convTip && <InfoTooltip text={stage.convTip} />}
-                  </span>
-                  <div className="text-gray-700 text-sm mt-0.5">→</div>
-                </div>
-              )}
-
-              {/* Card do estágio */}
-              <div className="flex flex-col items-center bg-[#0D0D0D] border border-[#1E1E1E] rounded-md px-4 py-4 min-w-[100px] hover:border-[#2A2A2A] transition-colors">
-                <div className="w-full bg-[#1A1A1A] rounded-full h-1 mb-3 overflow-hidden">
-                  <div
-                    className="h-1 rounded-full transition-all duration-500"
-                    style={{ width: `${barW}%`, background: stage.color }}
-                  />
-                </div>
-                <p className="text-2xl font-bold text-white">{val}</p>
-                <p className="text-[10px] text-gray-500 mt-1.5 text-center leading-tight flex items-center justify-center gap-0.5">
-                  {stage.label}
-                  <InfoTooltip text={stage.tip} />
-                </p>
+            <div key={stage.key} className="flex flex-col items-center bg-[#0D0D0D] border border-[#1E1E1E] rounded-md px-4 py-4 min-w-[112px] hover:border-[#2A2A2A] transition-colors">
+              <div className="w-full bg-[#1A1A1A] rounded-full h-1 mb-3 overflow-hidden">
+                <div
+                  className="h-1 rounded-full transition-all duration-500"
+                  style={{ width: String(barW) + '%', background: stage.color }}
+                />
               </div>
+              <p className="text-2xl font-bold text-white">{val}</p>
+              <p className="text-[10px] text-gray-500 mt-1.5 text-center leading-tight flex items-center justify-center gap-0.5">
+                {stage.label}
+                <InfoTooltip text={stage.tip} />
+              </p>
+              <p className="text-[10px] font-semibold text-gray-600 mt-1">
+                {representatividade}% do total
+              </p>
             </div>
           )
         })}
@@ -423,7 +404,6 @@ function FunnelFlow({ funil }) {
     </div>
   )
 }
-
 // ── Pipeline CRM com tooltips ─────────────────────────────────
 const PIPELINE_STAGES = [
   { key: 'cadastro',        label: 'Leads Cad.',  color: '#4B5563',
