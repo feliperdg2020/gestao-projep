@@ -68,6 +68,40 @@ const isRecord = value => Boolean(value) && typeof value === 'object' && !Array.
 const asArray = (value, fallback = []) => Array.isArray(value) ? value : fallback
 const idsEqual = (a, b) => String(a ?? '') === String(b ?? '')
 const idsInclude = (items = [], id) => items.some(item => idsEqual(item, id))
+const OLD_KNOWLEDGE_MOCK_IDS = new Set(['101', '102', '103'])
+const KNOWLEDGE_SEED_VERSION = 'html-seed-2026-06-28'
+
+function splitTextList(value) {
+  if (Array.isArray(value)) return value.map(item => `${item || ''}`.trim()).filter(Boolean)
+  if (!value) return []
+  return `${value}`.split('\n').map(item => item.trim()).filter(Boolean)
+}
+
+function normalizeTagList(value) {
+  const source = Array.isArray(value) ? value : `${value || ''}`.split(',')
+  const seen = new Set()
+  return source
+    .flatMap(item => `${item || ''}`.split(','))
+    .map(tag => tag.trim().replace(/\s+/g, ' '))
+    .filter(Boolean)
+    .filter(tag => {
+      const key = tag.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+}
+
+function normalizeKnowledgeStatus(status) {
+  const text = `${status || ''}`.trim()
+  if (!text) return 'Planejado'
+  const key = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  if (key === 'concluido') return 'Concluído'
+  if (key === 'em andamento') return 'Em andamento'
+  if (key === 'planejado') return 'Planejado'
+  if (key === 'arquivado') return 'Arquivado'
+  return text
+}
 
 function normalizeCommercialPeriod(period, fallback = {}) {
   const current = isRecord(period) ? period : {}
@@ -155,18 +189,41 @@ function normalizeProjects(data) {
       membros: asArray(project?.membros),
       tarefas: asArray(project?.tarefas),
     }))
-  const baseConhecimento = asArray(current.baseConhecimento, INITIAL_PROJETOS.baseConhecimento)
+  const storedKnowledge = current.baseConhecimento ? asArray(current.baseConhecimento) : []
+  const shouldApplyKnowledgeSeed = current.baseConhecimentoSeedVersion !== KNOWLEDGE_SEED_VERSION
+  const knowledgeById = new Map()
+
+  if (shouldApplyKnowledgeSeed) {
+    INITIAL_PROJETOS.baseConhecimento.forEach(record => {
+      knowledgeById.set(String(record.id), record)
+    })
+  }
+
+  storedKnowledge
+    .filter(record => !OLD_KNOWLEDGE_MOCK_IDS.has(String(record?.id ?? '')))
+    .forEach(record => {
+      knowledgeById.set(String(record.id), record)
+    })
+
+  const baseConhecimento = [...knowledgeById.values()]
     .map(record => ({
       ...record,
-      tags: asArray(record?.tags),
-      pontosFortes: asArray(record?.pontosFortes),
-      pontosFracos: asArray(record?.pontosFracos),
-      problemas: asArray(record?.problemas),
-      errosEquipe: asArray(record?.errosEquipe),
-      errosCliente: asArray(record?.errosCliente),
-      licoesAprendidas: asArray(record?.licoesAprendidas),
+      status: normalizeKnowledgeStatus(record?.status),
+      tags: normalizeTagList(record?.tags),
+      pontosFortes: splitTextList(record?.pontosFortes),
+      pontosFracos: splitTextList(record?.pontosFracos),
+      problemas: splitTextList(record?.problemas),
+      errosEquipe: splitTextList(record?.errosEquipe),
+      errosCliente: splitTextList(record?.errosCliente),
+      licoesAprendidas: splitTextList(record?.licoesAprendidas),
     }))
-  return { ...INITIAL_PROJETOS, ...current, projetos: projects, baseConhecimento }
+  return {
+    ...INITIAL_PROJETOS,
+    ...current,
+    projetos: projects,
+    baseConhecimento,
+    baseConhecimentoSeedVersion: KNOWLEDGE_SEED_VERSION,
+  }
 }
 
 // ── Persistência ─────────────────────────────────────────────

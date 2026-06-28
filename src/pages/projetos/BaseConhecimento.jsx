@@ -18,6 +18,7 @@ import {
   X,
 } from 'lucide-react'
 import { useData } from '../../contexts/DataContext'
+import { PROJECT_TAG_OPTIONS } from '../../data/projetos'
 
 const INPUT = 'w-full bg-[#0D0D0D] border border-[#1E1E1E] rounded px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#CE7028] transition-colors placeholder-gray-700'
 const LABEL = 'text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 block'
@@ -43,11 +44,11 @@ const TAB_META = {
   },
 }
 
-const STATUS_OPTIONS = ['Planejado', 'Em andamento', 'Concluido', 'Arquivado']
+const STATUS_OPTIONS = ['Planejado', 'Em andamento', 'Concluído', 'Arquivado']
 const STATUS_CLASS = {
   Planejado: 'bg-yellow-500/10 text-yellow-400 border-yellow-700/30',
   'Em andamento': 'bg-[#CE7028]/10 text-[#FF882D] border-[#CE7028]/30',
-  Concluido: 'bg-green-500/10 text-green-400 border-green-700/30',
+  Concluído: 'bg-green-500/10 text-green-400 border-green-700/30',
   Arquivado: 'bg-gray-500/10 text-gray-400 border-gray-700/30',
 }
 
@@ -59,7 +60,7 @@ const EMPTY_FORM = {
   data: new Date().toISOString().split('T')[0],
   ano: new Date().getFullYear().toString(),
   status: 'Planejado',
-  tags: '',
+  tags: [],
   descricao: '',
   pontosFortes: '',
   pontosFracos: '',
@@ -74,14 +75,27 @@ const EMPTY_FORM = {
 const idsEqual = (a, b) => String(a ?? '') === String(b ?? '')
 const listToText = value => Array.isArray(value) ? value.join('\n') : value || ''
 const textToList = value => `${value || ''}`.split('\n').map(item => item.trim()).filter(Boolean)
-const tagsToText = value => Array.isArray(value) ? value.join(', ') : value || ''
-const textToTags = value => `${value || ''}`.split(',').map(item => item.trim()).filter(Boolean)
+
+function normalizeTags(value) {
+  const source = Array.isArray(value) ? value : `${value || ''}`.split(',')
+  const seen = new Set()
+  return source
+    .flatMap(item => `${item || ''}`.split(','))
+    .map(tag => tag.trim().replace(/\s+/g, ' '))
+    .filter(Boolean)
+    .filter(tag => {
+      const key = tag.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+}
 
 function toForm(record = EMPTY_FORM) {
   return {
     ...EMPTY_FORM,
     ...record,
-    tags: tagsToText(record.tags),
+    tags: normalizeTags(record.tags),
     pontosFortes: listToText(record.pontosFortes),
     pontosFracos: listToText(record.pontosFracos),
     problemas: listToText(record.problemas),
@@ -95,7 +109,7 @@ function toForm(record = EMPTY_FORM) {
 function fromForm(form) {
   return {
     ...form,
-    tags: textToTags(form.tags),
+    tags: normalizeTags(form.tags),
     pontosFortes: textToList(form.pontosFortes),
     pontosFracos: textToList(form.pontosFracos),
     problemas: textToList(form.problemas),
@@ -127,6 +141,62 @@ function StatCard({ icon: Icon, label, value }) {
         <div className="w-10 h-10 rounded bg-[#CE7028]/10 border border-[#CE7028]/20 flex items-center justify-center">
           <Icon className="w-5 h-5 text-[#FF882D]" />
         </div>
+      </div>
+    </div>
+  )
+}
+
+function TagSelector({ value, options, onChange }) {
+  const selected = normalizeTags(value)
+  const selectedKeys = new Set(selected.map(tag => tag.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()))
+
+  const toggle = tag => {
+    const key = tag.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    if (selectedKeys.has(key)) {
+      onChange(selected.filter(item => item.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() !== key))
+      return
+    }
+    onChange([...selected, tag])
+  }
+
+  return (
+    <div className="bg-[#0D0D0D] border border-[#1E1E1E] rounded p-3">
+      {selected.length > 0 ? (
+        <div className="flex flex-wrap gap-2 mb-3">
+          {selected.map(tag => (
+            <button
+              key={tag}
+              type="button"
+              onClick={() => toggle(tag)}
+              className="inline-flex items-center gap-1.5 text-xs text-[#FF882D] bg-[#CE7028]/10 border border-[#CE7028]/30 rounded px-2 py-1 hover:bg-[#CE7028]/20 transition-colors"
+            >
+              {tag}
+              <X className="w-3 h-3" />
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-gray-600 mb-3">Selecione uma ou mais tags padronizadas.</p>
+      )}
+
+      <div className="max-h-44 overflow-y-auto pr-1 flex flex-wrap gap-2">
+        {options.map(tag => {
+          const active = selectedKeys.has(tag.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase())
+          return (
+            <button
+              key={tag}
+              type="button"
+              onClick={() => toggle(tag)}
+              className={`text-xs border rounded px-2 py-1 transition-colors ${
+                active
+                  ? 'bg-[#CE7028] border-[#CE7028] text-white'
+                  : 'bg-[#111111] border-[#1E1E1E] text-gray-400 hover:text-white hover:border-[#CE7028]/60'
+              }`}
+            >
+              {tag}
+            </button>
+          )
+        })}
       </div>
     </div>
   )
@@ -236,7 +306,11 @@ function KnowledgeModal({ record, members, onClose, onSave }) {
           <div className="grid md:grid-cols-2 gap-4">
             <div>
               <label className={LABEL}>Tags</label>
-              <input value={form.tags} onChange={event => set('tags', event.target.value)} className={INPUT} placeholder="Processos, Entrega, Cliente" />
+              <TagSelector
+                value={form.tags}
+                options={PROJECT_TAG_OPTIONS}
+                onChange={tags => set('tags', tags)}
+              />
             </div>
             {form.tipo === 'treinamento' && (
               <div>

@@ -637,13 +637,35 @@ export function DataProvider({ children }) {
     return { success: true }
   }
 
+  const normalizeKnowledgeStatus = status => {
+    const text = `${status || ''}`.trim()
+    const key = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    if (key === 'concluido') return 'Concluído'
+    if (key === 'em andamento') return 'Em andamento'
+    if (key === 'arquivado') return 'Arquivado'
+    return text || 'Planejado'
+  }
+
+  const normalizeKnowledgeTags = tags => {
+    const source = Array.isArray(tags) ? tags : `${tags || ''}`.split(',')
+    const seen = new Set()
+    return source
+      .flatMap(tag => `${tag || ''}`.split(','))
+      .map(tag => tag.trim().replace(/\s+/g, ' '))
+      .filter(Boolean)
+      .filter(tag => {
+        const key = tag.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+  }
+
   const normalizeKnowledgeRecord = record => {
     const member = members.find(item => idsEqual(item.id, record.responsavelId))
     const data = record.data || new Date().toISOString().split('T')[0]
     return {
       tipo: 'projeto',
-      status: 'Planejado',
-      tags: [],
       pontosFortes: [],
       pontosFracos: [],
       problemas: [],
@@ -657,6 +679,8 @@ export function DataProvider({ children }) {
       responsavel: member?.nome || record.responsavel?.trim() || '',
       data,
       ano: `${record.ano || data.slice(0, 4)}`,
+      status: normalizeKnowledgeStatus(record.status),
+      tags: normalizeKnowledgeTags(record.tags),
     }
   }
 
