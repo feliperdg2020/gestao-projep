@@ -36,9 +36,11 @@ export const ACCESS_MODULES = [
     key: 'projetos',
     label: 'Projetos',
     icon: 'folder-kanban',
-    path: null,
-    available: false,
-    subareas: [],
+    path: '/projetos',
+    available: true,
+    subareas: [
+      { key: 'projetos.baseConhecimento', label: 'Base de Conhecimento', path: '/projetos/base', icon: 'file-text' },
+    ],
   },
   {
     key: 'marketing',

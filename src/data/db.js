@@ -155,7 +155,18 @@ function normalizeProjects(data) {
       membros: asArray(project?.membros),
       tarefas: asArray(project?.tarefas),
     }))
-  return { ...INITIAL_PROJETOS, ...current, projetos: projects }
+  const baseConhecimento = asArray(current.baseConhecimento, INITIAL_PROJETOS.baseConhecimento)
+    .map(record => ({
+      ...record,
+      tags: asArray(record?.tags),
+      pontosFortes: asArray(record?.pontosFortes),
+      pontosFracos: asArray(record?.pontosFracos),
+      problemas: asArray(record?.problemas),
+      errosEquipe: asArray(record?.errosEquipe),
+      errosCliente: asArray(record?.errosCliente),
+      licoesAprendidas: asArray(record?.licoesAprendidas),
+    }))
+  return { ...INITIAL_PROJETOS, ...current, projetos: projects, baseConhecimento }
 }
 
 // ── Persistência ─────────────────────────────────────────────
@@ -389,6 +400,10 @@ const db = {
           ...task,
           responsavelId: idsEqual(task.responsavelId, userId) ? null : task.responsavelId,
         })),
+      })),
+      baseConhecimento: (projetos.baseConhecimento || []).map(record => ({
+        ...record,
+        responsavelId: idsEqual(record.responsavelId, userId) ? null : record.responsavelId,
       })),
     })
 

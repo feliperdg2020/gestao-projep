@@ -19,6 +19,7 @@ const GPMembros = lazy(() => import('./pages/gp/Membros'))
 const ProcessoSeletivo = lazy(() => import('./pages/gp/ProcessoSeletivo'))
 const Aprovacoes = lazy(() => import('./pages/gp/Aprovacoes'))
 const Seguranca = lazy(() => import('./pages/presidencia/Seguranca'))
+const BaseConhecimentoProjetos = lazy(() => import('./pages/projetos/BaseConhecimento'))
 const Perfil = lazy(() => import('./pages/Perfil'))
 const Chat = lazy(() => import('./pages/Chat'))
 
@@ -72,6 +73,9 @@ function AppRoutes() {
 
       <Route path="/presidencia"           element={<ProtectedRoute requiredPath="/presidencia/seguranca"><Navigate to="/presidencia/seguranca" replace /></ProtectedRoute>} />
       <Route path="/presidencia/seguranca" element={<ProtectedRoute><Seguranca /></ProtectedRoute>} />
+
+      <Route path="/projetos"      element={<ProtectedRoute requiredPath="/projetos/base"><Navigate to="/projetos/base" replace /></ProtectedRoute>} />
+      <Route path="/projetos/base" element={<ProtectedRoute><BaseConhecimentoProjetos /></ProtectedRoute>} />
 
       <Route path="/membros" element={<Navigate to="/chat" replace />} />
       <Route path="/chat"   element={<ProtectedRoute><Chat /></ProtectedRoute>} />

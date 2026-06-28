@@ -637,6 +637,76 @@ export function DataProvider({ children }) {
     return { success: true }
   }
 
+  const normalizeKnowledgeRecord = record => {
+    const member = members.find(item => idsEqual(item.id, record.responsavelId))
+    const data = record.data || new Date().toISOString().split('T')[0]
+    return {
+      tipo: 'projeto',
+      status: 'Planejado',
+      tags: [],
+      pontosFortes: [],
+      pontosFracos: [],
+      problemas: [],
+      errosEquipe: [],
+      errosCliente: [],
+      licoesAprendidas: [],
+      link: '',
+      cargaHoraria: '',
+      ...record,
+      titulo: record.titulo?.trim() || '',
+      responsavel: member?.nome || record.responsavel?.trim() || '',
+      data,
+      ano: `${record.ano || data.slice(0, 4)}`,
+    }
+  }
+
+  const updateProjectKnowledgeList = updater => db.mutate('projetos', current => ({
+    ...current,
+    baseConhecimento: typeof updater === 'function'
+      ? updater(current.baseConhecimento || [])
+      : updater,
+  }))
+
+  const addKnowledgeRecord = record => {
+    if (!canUse('projetos.baseConhecimento')) return { success: false, error: 'Voce nao pode cadastrar registros de Projetos.' }
+    const normalized = normalizeKnowledgeRecord(record)
+    if (!normalized.titulo) return { success: false, error: 'Informe o titulo do registro.' }
+    if (!normalized.descricao?.trim()) return { success: false, error: 'Informe a descricao/contexto.' }
+    const created = {
+      ...normalized,
+      id: db.createId(),
+      createdAt: new Date().toISOString(),
+      updatedAt: null,
+    }
+    updateProjectKnowledgeList(current => [created, ...current])
+    return { success: true, record: created }
+  }
+
+  const updateKnowledgeRecord = (id, data) => {
+    if (!canUse('projetos.baseConhecimento')) return { success: false, error: 'Voce nao pode editar registros de Projetos.' }
+    let updatedRecord = null
+    updateProjectKnowledgeList(current => current.map(record => {
+      if (!idsEqual(record.id, id)) return record
+      updatedRecord = {
+        ...record,
+        ...normalizeKnowledgeRecord({ ...record, ...data }),
+        id: record.id,
+        createdAt: record.createdAt,
+        updatedAt: new Date().toISOString(),
+      }
+      return updatedRecord
+    }))
+    return updatedRecord
+      ? { success: true, record: updatedRecord }
+      : { success: false, error: 'Registro nao encontrado.' }
+  }
+
+  const deleteKnowledgeRecord = id => {
+    if (!canUse('projetos.baseConhecimento')) return { success: false, error: 'Voce nao pode excluir registros de Projetos.' }
+    updateProjectKnowledgeList(current => current.filter(record => !idsEqual(record.id, id)))
+    return { success: true }
+  }
+
   const updatePeopleList = (key, updater) => db.mutate('gestaoPessoas', current => ({
     ...current,
     [key]: typeof updater === 'function' ? updater(current[key] || []) : updater,
@@ -841,6 +911,10 @@ export function DataProvider({ children }) {
       markConversationRead: markConversationReadInDb,
       projectData,
       projects: projectData.projetos || [],
+      knowledgeRecords: projectData.baseConhecimento || [],
+      addKnowledgeRecord,
+      updateKnowledgeRecord,
+      deleteKnowledgeRecord,
     }}>
       {children}
     </DataContext.Provider>
