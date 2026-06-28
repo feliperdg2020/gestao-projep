@@ -811,22 +811,22 @@ function getIsoWeek(date) {
 
 function buildWeekRanges(referenceDate, count = 8) {
   const reference = new Date(referenceDate)
-  const day = reference.getDay() || 7
-  const currentMonday = new Date(reference)
-  currentMonday.setDate(reference.getDate() - day + 1)
-  currentMonday.setHours(0, 0, 0, 0)
+  const day = reference.getDay()
+  const currentSunday = new Date(reference)
+  currentSunday.setDate(reference.getDate() - day)
+  currentSunday.setHours(0, 0, 0, 0)
 
   return Array.from({ length: count }, (_, index) => {
-    const monday = new Date(currentMonday)
-    monday.setDate(currentMonday.getDate() - ((count - 1 - index) * 7))
-    const friday = new Date(monday)
-    friday.setDate(monday.getDate() + 4)
-    const week = getIsoWeek(monday)
+    const sunday = new Date(currentSunday)
+    sunday.setDate(currentSunday.getDate() - ((count - 1 - index) * 7))
+    const saturday = new Date(sunday)
+    saturday.setDate(sunday.getDate() + 6)
+    const week = getIsoWeek(sunday)
     return {
-      id: `${monday.getFullYear()}-W${String(week).padStart(2, '0')}`,
+      id: `${sunday.getFullYear()}-W${String(week).padStart(2, '0')}`,
       label: `Semana ${week}`,
-      inicio: isoDate(monday),
-      fim: isoDate(friday),
+      inicio: isoDate(sunday),
+      fim: isoDate(saturday),
     }
   })
 }
