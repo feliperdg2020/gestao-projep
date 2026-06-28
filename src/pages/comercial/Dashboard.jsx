@@ -167,6 +167,7 @@ function PeriodNav({ viewMode, setViewMode, semaIdx, setSemaIdx, mesIdx, setMesI
     <div className="flex flex-col sm:flex-row sm:items-center gap-3">
       <div className="flex items-center gap-1 bg-[#111111] border border-[#1E1E1E] rounded-md p-1">
         <button
+          type="button"
           onClick={() => setViewMode('aovivo')}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold transition-all ${
             viewMode === 'aovivo' ? 'bg-[#CE7028] text-white' : 'text-gray-400 hover:text-white'
@@ -176,6 +177,7 @@ function PeriodNav({ viewMode, setViewMode, semaIdx, setSemaIdx, mesIdx, setMesI
           Ao Vivo
         </button>
         <button
+          type="button"
           onClick={() => setViewMode('semanal')}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold transition-all ${
             viewMode === 'semanal' ? 'bg-[#CE7028] text-white' : 'text-gray-400 hover:text-white'
@@ -185,6 +187,7 @@ function PeriodNav({ viewMode, setViewMode, semaIdx, setSemaIdx, mesIdx, setMesI
           Semanal
         </button>
         <button
+          type="button"
           onClick={() => setViewMode('mensal')}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold transition-all ${
             viewMode === 'mensal' ? 'bg-[#CE7028] text-white' : 'text-gray-400 hover:text-white'
@@ -198,6 +201,7 @@ function PeriodNav({ viewMode, setViewMode, semaIdx, setSemaIdx, mesIdx, setMesI
       {viewMode === 'semanal' && (
         <div className="flex items-center gap-2">
           <button
+            type="button"
             onClick={() => setSemaIdx(i => Math.max(0, i - 1))}
             disabled={semaIdx === 0}
             className="w-7 h-7 flex items-center justify-center rounded border border-[#2A2A2A] text-gray-400 hover:text-white hover:border-[#CE7028] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
@@ -208,6 +212,7 @@ function PeriodNav({ viewMode, setViewMode, semaIdx, setSemaIdx, mesIdx, setMesI
             {semana.label} — {fmtDate(semana.inicio)} a {fmtDate(semana.fim)}
           </span>
           <button
+            type="button"
             onClick={() => setSemaIdx(i => Math.min(semanas.length - 1, i + 1))}
             disabled={semaIdx === semanas.length - 1}
             className="w-7 h-7 flex items-center justify-center rounded border border-[#2A2A2A] text-gray-400 hover:text-white hover:border-[#CE7028] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
@@ -220,6 +225,7 @@ function PeriodNav({ viewMode, setViewMode, semaIdx, setSemaIdx, mesIdx, setMesI
       {viewMode === 'mensal' && (
         <div className="flex items-center gap-2">
           <button
+            type="button"
             onClick={() => setMesIdx(i => Math.max(0, i - 1))}
             disabled={mesIdx === 0}
             className="w-7 h-7 flex items-center justify-center rounded border border-[#2A2A2A] text-gray-400 hover:text-white hover:border-[#CE7028] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
@@ -230,6 +236,7 @@ function PeriodNav({ viewMode, setViewMode, semaIdx, setSemaIdx, mesIdx, setMesI
             {mes.label}
           </span>
           <button
+            type="button"
             onClick={() => setMesIdx(i => Math.min(meses.length - 1, i + 1))}
             disabled={mesIdx === meses.length - 1}
             className="w-7 h-7 flex items-center justify-center rounded border border-[#2A2A2A] text-gray-400 hover:text-white hover:border-[#CE7028] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
@@ -858,6 +865,8 @@ function buildRemoteDashboardData(snapshot, members, commercial) {
 export default function ComercialDashboard() {
   const { commercial, members } = useData()
   const [remoteSnapshot, setRemoteSnapshot] = useState(() => readCachedSnapshot())
+  const remoteSnapshotRef = useRef(remoteSnapshot)
+  const snapshotIdRef = useRef(remoteSnapshot?.id || null)
   const [remoteStatus, setRemoteStatus] = useState(() => ({
     loading: !readCachedSnapshot(),
     error: '',
@@ -874,6 +883,10 @@ export default function ComercialDashboard() {
   const [mesIdx,   setMesIdx]   = useState(() => findCurrentMonthIndex(meses))
 
   useEffect(() => {
+    remoteSnapshotRef.current = remoteSnapshot
+  }, [remoteSnapshot])
+
+  useEffect(() => {
     let cancelled = false
     let fetching = false
 
@@ -887,7 +900,7 @@ export default function ComercialDashboard() {
         return
       }
 
-      if (!silent && !remoteSnapshot) setRemoteStatus({ loading: true, error: '' })
+      if (!silent && !remoteSnapshotRef.current) setRemoteStatus({ loading: true, error: '' })
 
       let data, error
       try {
@@ -906,7 +919,7 @@ export default function ComercialDashboard() {
         if (cancelled) return
         setRemoteStatus({
           loading: false,
-          error: remoteSnapshot ? '' : 'Tempo esgotado. Usando dados locais.',
+          error: remoteSnapshotRef.current ? '' : 'Tempo esgotado. Usando dados locais.',
         })
         fetching = false
         return
@@ -917,7 +930,7 @@ export default function ComercialDashboard() {
       if (error) {
         setRemoteStatus({
           loading: false,
-          error: remoteSnapshot ? '' : 'Não foi possível carregar dados do Pipefy. Usando fallback local.',
+          error: remoteSnapshotRef.current ? '' : 'Não foi possível carregar dados do Pipefy. Usando fallback local.',
         })
         console.warn('[ComercialDashboard] Falha ao carregar snapshot comercial:', error.message || error)
         fetching = false
@@ -939,16 +952,17 @@ export default function ComercialDashboard() {
       }) || null
 
       setRemoteSnapshot(selectedSnapshot)
+      remoteSnapshotRef.current = selectedSnapshot
       cacheSnapshot(selectedSnapshot)
       setRemoteStatus({
         loading: false,
         error: selectedSnapshot ? '' : 'Nenhum snapshot encontrado. Usando dados locais.',
       })
-      if (selectedSnapshot) {
+      if (selectedSnapshot && snapshotIdRef.current !== selectedSnapshot.id) {
+        snapshotIdRef.current = selectedSnapshot.id
         const referenceDate = selectedSnapshot.synced_at || selectedSnapshot.payload?.periodo?.atualizadoEm || new Date().toISOString()
         setSemaIdx(findCurrentWeekIndex(buildWeekRanges(referenceDate, 10)))
         setMesIdx(findCurrentMonthIndex(buildMonthRanges(referenceDate, 8)))
-        setViewMode('aovivo')
       }
       fetching = false
     }
@@ -962,7 +976,7 @@ export default function ComercialDashboard() {
       window.clearInterval(intervalId)
       window.removeEventListener('focus', onFocus)
     }
-  }, [remoteSnapshot])
+  }, [])
 
   // TODO: [Supabase] substituir por: supabase.from('comercial_semanas').select('*').order('inicio')
   const currentPeriod = useMemo(() => {
