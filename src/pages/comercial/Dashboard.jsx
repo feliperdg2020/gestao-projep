@@ -472,7 +472,7 @@ function PipelineGrid({ pipeline }) {
 }
 
 function ComplementaryMetrics({ funil }) {
-  const ligacoes = funil.tentativasContato || funil.ligoesRealizadas || funil.ligacoesRealizadas || 0
+  const ligacoes = funil.tentativasContato || 0
   const leads = funil.leadsCadastrados || 0
   const leadsTrabalhados = funil.leadsTrabalhados || ligacoes
   const makeRate = (label, numerator, denominator, tip, tone = 'text-blue-400') => ({

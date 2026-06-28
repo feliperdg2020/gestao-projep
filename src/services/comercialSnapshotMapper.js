@@ -686,7 +686,7 @@ function buildMetricsFromCards(cards, members, commercial, payload, range = null
       FUNNEL_RANKS.contacted,
     )
 
-    const contacted = eventReachedInPeriod(
+    const contactAttempted = eventReachedInPeriod(
       card,
       EVENT_LABELS.contact,
       STAGE_KEYWORDS.contact,
@@ -776,13 +776,14 @@ function buildMetricsFromCards(cards, members, commercial, payload, range = null
       FUNNEL_RANKS.contract,
     )
     const futureInterest = currentStageInPeriod(card, STAGE_KEYWORDS.futureInterest, range)
+    const contactStage = currentStageInPeriod(card, STAGE_KEYWORDS.contact, range)
     const pendingNoShow = currentStageInPeriod(card, STAGE_KEYWORDS.pendingScheduling, range)
     const lost = currentStageInPeriod(card, STAGE_KEYWORDS.lost, range)
 
     if (leadCreated) funil.leadsCadastrados += 1
     if (worked) funil.leadsTrabalhados += 1
-    if (contacted) {
-      funil.tentativasContato += 1
+    if (contactStage) funil.tentativasContato += 1
+    if (contactAttempted) {
       funil.ligoesRealizadas += 1
       funil.ligacoesRealizadas += 1
     }
@@ -812,7 +813,7 @@ function buildMetricsFromCards(cards, members, commercial, payload, range = null
 
     const hunter = findOrCreateRow(hunters, getResponsibleTeamMember(card, 'hunter', hunterIndex))
     if (hunter) {
-      if (contacted) hunter.contatadas += 1
+      if (contactAttempted) hunter.contatadas += 1
       if (diagnosticScheduled) hunter.reunioesMarcadas += 1
       if (diagnosticDone) hunter.reunioesRealizadas += 1
       if (diagnosticNoShow) hunter.noShows += 1
@@ -858,7 +859,6 @@ export function mapComercialSnapshot(payload, { members = [], commercial = {}, r
   }
   funil.ligoesRealizadas = funil.ligoesRealizadas || funil.ligacoesRealizadas || 0
   funil.ligacoesRealizadas = funil.ligacoesRealizadas || funil.ligoesRealizadas || 0
-  funil.tentativasContato = funil.tentativasContato || funil.ligoesRealizadas || 0
   funil.leadsTrabalhados = funil.leadsTrabalhados || funil.tentativasContato || 0
   funil.pendentesNoShow = funil.pendentesNoShow || funil.agendamentosPendentes || funil.noShows || 0
 
