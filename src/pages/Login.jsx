@@ -29,6 +29,7 @@ function hasRecoveryLink() {
   const search = new URLSearchParams(window.location.search)
   const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''))
   return (
+    window.location.pathname === '/redefinir-senha' ||
     search.get('reset') === '1' ||
     search.get('type') === 'recovery' ||
     hash.get('type') === 'recovery' ||
@@ -58,10 +59,13 @@ function LeftPanel() {
 function Alert({ type, msg }) {
   if (!msg) return null
   const isError = type === 'error'
+  const text = typeof msg === 'string'
+    ? msg
+    : msg?.message || msg?.error || 'Ocorreu um erro inesperado. Veja o console para mais detalhes.'
   return (
     <div className={`flex items-center gap-2 rounded px-3 py-2.5 text-sm ${isError ? 'bg-red-950/50 border border-red-900/50 text-red-400' : 'bg-green-950/40 border border-green-900/40 text-green-400'}`}>
       {isError ? <AlertCircle className="w-4 h-4 flex-shrink-0" /> : <CheckCircle className="w-4 h-4 flex-shrink-0" />}
-      {msg}
+      {text}
     </div>
   )
 }
@@ -161,7 +165,7 @@ export default function Login() {
       setError(result.error)
       return
     }
-    setSuccess('Se este email estiver cadastrado e ativo, voce recebera um link de recuperacao em breve.')
+    setSuccess('Se este e-mail estiver cadastrado, enviamos um link de recuperação.')
   }
 
   const handleReset = async event => {

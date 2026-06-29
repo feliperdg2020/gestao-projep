@@ -65,7 +65,47 @@ const idsEqual = (a, b) => String(a ?? '') === String(b ?? '')
 const normalizeEmail = email => `${email || ''}`.trim().toLowerCase()
 
 const logRemoteError = (action, error) => {
-  if (error) console.warn(`[Supabase] ${action}:`, error.message || error)
+  if (error) console.warn(`[Supabase] ${action}:`, error)
+}
+
+function describeSupabaseError(error) {
+  if (!error) {
+    return 'O Supabase retornou um erro vazio. Verifique as configurações de autenticação e tente novamente.'
+  }
+
+  const details = [
+    error.message,
+    error.status ? `Status: ${error.status}` : '',
+    error.name ? `Nome: ${error.name}` : '',
+    error.code ? `Código: ${error.code}` : '',
+  ].filter(Boolean)
+
+  const fallback = (() => {
+    try {
+      const serialized = JSON.stringify(error)
+      return serialized && serialized !== '{}' ? serialized : ''
+    } catch {
+      return String(error || '')
+    }
+  })()
+
+  const rawMessage = details.join(' | ') || fallback
+  const normalized = rawMessage.toLowerCase()
+
+  if (normalized.includes('email rate limit')) {
+    return `${rawMessage}. Muitas tentativas de recuperação foram feitas. Aguarde alguns minutos e tente novamente.`
+  }
+  if (normalized.includes('smtp')) {
+    return `${rawMessage}. As credenciais SMTP do Supabase parecem inválidas ou ausentes.`
+  }
+  if (normalized.includes('redirect') || normalized.includes('not allowed')) {
+    return `${rawMessage}. A URL de redirecionamento não está permitida nas configurações de Auth do Supabase.`
+  }
+  if (normalized.includes('user not found') || normalized.includes('not found')) {
+    return `${rawMessage}. Nenhum usuário foi encontrado com este e-mail.`
+  }
+
+  return rawMessage || 'O Supabase retornou um erro vazio. Verifique as configurações de autenticação e tente novamente.'
 }
 
 const userUuid = userId => appIdToUuid(userId, NS.user)
@@ -474,13 +514,14 @@ export async function signInWithSupabaseAuth(email, password) {
 export async function sendSupabasePasswordReset(email) {
   if (!isSupabaseConfigured || !supabase) return { success: false, enabled: false }
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
-  const redirectTo = origin ? `${origin}/login` : undefined
+  const redirectTo = origin ? `${origin}/redefinir-senha` : undefined
   const { error } = await supabase.auth.resetPasswordForEmail(normalizeEmail(email), {
     redirectTo,
   })
   if (error) {
+    console.error('[Supabase] Erro completo ao enviar recuperação de senha:', error)
     logRemoteError('send password reset', error)
-    return { success: false, error: error.message }
+    return { success: false, error: describeSupabaseError(error), rawError: error }
   }
   return { success: true }
 }

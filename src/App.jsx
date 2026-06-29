@@ -57,6 +57,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={user ? <Navigate to={defaultHome(user)} replace /> : <Login />} />
+      <Route path="/redefinir-senha" element={<Login />} />
       <Route path="/" element={<Navigate to={user ? defaultHome(user) : '/login'} replace />} />
 
       <Route path="/comercial"           element={<ProtectedRoute><ComercialDashboard /></ProtectedRoute>} />
